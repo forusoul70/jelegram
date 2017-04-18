@@ -10,6 +10,12 @@
 #include <sys/epoll.h>
 #include <mutex>
 #include "../protocol/ProtocolSend.h"
+#include "../NativeByteBuffer.h"
+
+typedef class ConnectionManagerListener {
+public:
+    virtual void onByteReceived(NativeByteBufferPtr buffer) = 0;
+};
 
 class ConnectionManager {
 public:
@@ -17,6 +23,8 @@ public:
     static ConnectionManager& getInstance();
 
     void sendRequest(ProtocolSendPtr request);
+
+    void setListener(ConnectionManagerListener* listener);
 private:
     enum ConnectionState {
         Idle,
@@ -35,6 +43,7 @@ private:
     void selectOperation();
 
     void processPendingSendRequest();
+    void processReceiveMessage();
 
     std::mutex mSendRequestTaskLock;
     std::vector<ProtocolSendPtr> mPendingSendRequestTask;
@@ -47,5 +56,9 @@ private:
     int mPollFd;
     int mPollEventFd;
     struct epoll_event *mPollEvents;
+
+    NativeByteBufferPtr mReceiveBuffer;
+
+    ConnectionManagerListener* mDelegate;
 };
 #endif //JELEGRAM_CONNECTIONMANAGER_H

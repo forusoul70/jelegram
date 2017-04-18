@@ -67,6 +67,7 @@ NativeByteBuffer::~NativeByteBuffer() {
         delete[] buffer;
         buffer = nullptr;
     }
+    LOGD(LOG_TAG, "~NativeByteBuffer()");
 }
 
 uint32_t NativeByteBuffer::position() {

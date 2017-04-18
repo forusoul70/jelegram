@@ -11,6 +11,8 @@
 
 #ifdef ANDROID
 #include <jni.h>
+#include <memory>
+
 #endif
 
 class ByteArray;
@@ -95,5 +97,5 @@ private:
     bool bufferOwner = true;
     jobject javaByteBuffer = nullptr;
 };
-
+typedef std::shared_ptr<NativeByteBuffer> NativeByteBufferPtr;
 #endif //JELEGRAM_NATIVEBUFFER_H

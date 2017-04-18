@@ -18,7 +18,7 @@ extern "C" inline void initialize(JavaVM* vm) {
 
     JNIEnv *env = 0;
     if (javaVm->GetEnv((void **) &env, JNI_VERSION_1_6) != JNI_OK) {
-        LOGE("JavaWrap", "can't get jnienv");
+        LOGE("JavaWrap", "can't get jni env");
         exit(1);
     }
     JavaByteBuffer = (jclass) env->NewGlobalRef(env->FindClass("java/nio/ByteBuffer"));

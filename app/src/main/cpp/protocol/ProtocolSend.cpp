@@ -3,6 +3,9 @@
 //
 
 #include "ProtocolSend.h"
+#include "../logging.h"
+
+#define LOG_TAG "ProtocolSend"
 
 ProtocolSend::ProtocolSend(NativeByteBuffer *buffer):
 mRequestData(nullptr) {
@@ -10,10 +13,13 @@ mRequestData(nullptr) {
 }
 
 ProtocolSend::~ProtocolSend() {
+    LOGD(LOG_TAG, "~ProtocolSend()");
     delete mRequestData;
 }
 
 NativeByteBuffer *ProtocolSend::getBuffer() {
     return mRequestData;
 }
+
+#undef LOG_TAG;
 

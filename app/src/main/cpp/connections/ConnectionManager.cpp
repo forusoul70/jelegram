@@ -11,6 +11,7 @@
 #include "../logging.h"
 
 #define LOG_TAG "ConnectionManager"
+#define READ_BUFFER_SIZE 1024 * 128
 
 const int MAX_EVENT_COUNT = 128;
 
@@ -19,7 +20,8 @@ ConnectionManager::ConnectionManager()
 ,mSocketFd(-1)
 ,mPollFd(-1)
 ,mPollEventFd(-1)
-,mPollEvents(NULL) {
+,mPollEvents(NULL)
+,mDelegate(NULL) {
     // create epoll fd
     if ((mPollFd = epoll_create(MAX_EVENT_COUNT)) == -1) {
         LOGE(LOG_TAG, "Failed to create epoll instance");
@@ -37,10 +39,11 @@ ConnectionManager::ConnectionManager()
         }
     }
 
-    if ((mPollEvents = new epoll_event[128]) == nullptr) {
+    if ((mPollEvents = new epoll_event[MAX_EVENT_COUNT]) == nullptr) {
         LOGE(LOG_TAG, "Unable to allocate epoll events");
         exit(1);
     }
+
     mPollEventFd = eventfd(0, EFD_NONBLOCK);
     if (mPollEventFd < 0) {
         LOGE(LOG_TAG, "Failed to create event fd");
@@ -48,12 +51,19 @@ ConnectionManager::ConnectionManager()
     }
 
     struct epoll_event event = {0};
-    event.data.ptr = nullptr;
-    event.events = EPOLLIN | EPOLLOUT;
+    event.data.ptr = &mPollEventFd;
+    event.events = EPOLLIN | EPOLLET;
     if (epoll_ctl(mPollFd, EPOLL_CTL_ADD, mPollEventFd, &event) < 0) {
         LOGE(LOG_TAG, "Failed to add poll event");
         exit(1);
     }
+
+    mReceiveBuffer = std::make_shared<NativeByteBuffer>((uint32_t) READ_BUFFER_SIZE);
+    if (mReceiveBuffer == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate receive buffer");
+        exit(1);
+    }
+
     // initialize
     initialize();
 }
@@ -71,6 +81,8 @@ ConnectionManager::~ConnectionManager() {
     }
 
     delete[] mPollEvents;
+
+    mReceiveBuffer->clear();
 }
 
 #pragma clang diagnostic push
@@ -100,11 +112,6 @@ void ConnectionManager::openConnection() {
 
     std::lock_guard<std::mutex> lock(mConnectionLock);
     mConnectionState = Suspended;
-    if ((mSocketFd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        LOGE(LOG_TAG, "Failed to open socket");
-        closeConnection();
-        return;
-    }
 
     struct addrinfo hint;
     memset(&hint, 0, sizeof(hint));
@@ -133,7 +140,7 @@ void ConnectionManager::openConnection() {
     freeaddrinfo(server);
 
     struct epoll_event event = {0};
-    event.data.ptr = nullptr;
+    event.data.ptr = &mSocketFd;
     event.events = EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLET;
     if (epoll_ctl(mPollFd, EPOLL_CTL_ADD, mSocketFd, &event) != 0) {
         LOGE(LOG_TAG, "openConnection() epoll_ctl, adding socket failed", this);
@@ -147,30 +154,36 @@ void ConnectionManager::openConnection() {
 void ConnectionManager::closeConnection() {
     std::lock_guard<std::mutex> lock(mConnectionLock);
     if (mSocketFd >= 0) {
+        epoll_ctl(mPollFd, EPOLL_CTL_DEL, mSocketFd, NULL);
         close(mSocketFd);
+        mSocketFd = -1;
     }
     mConnectionState = Suspended;
+
 }
 
 void ConnectionManager::selectOperation() {
-    int eventCount = epoll_wait(mPollFd, mPollEvents, MAX_EVENT_COUNT, 100);
+    int eventCount = epoll_wait(mPollFd, mPollEvents, MAX_EVENT_COUNT, 1000);
     if (eventCount < 0) {
         LOGD(LOG_TAG, "selectOperation(), Failed to wait error : [%d] pollFd : [%d]", mPollFd, errno);
         exit(1);
     }
 
-    std::lock_guard<std::mutex> lock(mConnectionLock);
     for (int32_t i = 0; i < eventCount; i++) {
-        switch (mPollEvents[i].events) {
-            case EPOLLIN:
-                LOGD(LOG_TAG, "selectOperation(), EPOLLIN");
-                break;
-            case EPOLLOUT:
-                LOGD(LOG_TAG, "selectOperation(), EPOLLOUT");
+        bool fromSocket = mPollEvents[i].data.ptr == &mSocketFd;
+        if (mPollEvents[i].events & EPOLLIN) {
+            LOGD(LOG_TAG, "selectOperation(), EPOLLIN [%s]", fromSocket ? "socket" : "send request");
+            if (fromSocket) {
+                processReceiveMessage();
+            } else {
                 processPendingSendRequest();
-                break;
-            default:
-                break;
+                uint64_t read;
+                eventfd_read(mPollEventFd, &read);
+            }
+        } else if (mPollEvents[i].events & EPOLLOUT) {
+            LOGD(LOG_TAG, "selectOperation(), EPOLLOUT [%s]", fromSocket ? "socket" : "send request");
+        } else {
+            LOGD(LOG_TAG, "selectOperation() Not handle event [%d]", mPollEvents[i].events);
         }
     }
 }
@@ -190,6 +203,7 @@ void ConnectionManager::sendRequest(ProtocolSendPtr request) {
 
     // wake up
     eventfd_write(mPollEventFd, 1);
+    LOGI(LOG_TAG, "wake up");
 }
 
 void ConnectionManager::processPendingSendRequest() {
@@ -215,6 +229,7 @@ void ConnectionManager::processPendingSendRequest() {
     ssize_t sendCount = send(mSocketFd, requestBuffer->bytes() + requestBuffer->position(), requestBuffer->remaining(), NULL);
     if (sendCount < 0) {
         LOGE(LOG_TAG, "processPendingSendRequest(), Failed to send");
+        closeConnection();
         mPendingSendRequestTask.erase(iterator);
         return;
     }
@@ -225,6 +240,36 @@ void ConnectionManager::processPendingSendRequest() {
     if (requestBuffer->hasRemaining() == false) {
         mPendingSendRequestTask.erase(iterator);
     }
+}
+
+
+void ConnectionManager::processReceiveMessage() {
+    std::lock_guard<std::mutex> lockTask(mConnectionLock);
+    if (mConnectionState != Connected) {
+        LOGE(LOG_TAG, "processReceiveMessage(), Connection is not established");
+        return;
+    }
+
+    mReceiveBuffer->clear();
+    ssize_t receiveCount = recv(mSocketFd, mReceiveBuffer->bytes(), READ_BUFFER_SIZE, NULL);
+    LOGD(LOG_TAG, "processReceiveMessage(), receive finished [%d]", receiveCount);
+    if (receiveCount < 0) {
+        LOGE(LOG_TAG, "processReceiveMessage(), Failed to receive [%d] [%d]", mSocketFd,  errno);
+        closeConnection();
+        return;
+    }
+
+    if (receiveCount > 0) {
+        mReceiveBuffer->skip((uint32_t) receiveCount);
+        mReceiveBuffer->flip();
+        if (mDelegate != nullptr) {
+            mDelegate->onByteReceived(mReceiveBuffer);
+        }
+    }
+}
+
+void ConnectionManager::setListener(ConnectionManagerListener *listener) {
+    mDelegate = listener;
 }
 
 #undef LOG_TAG
