@@ -3,7 +3,9 @@ package jelegram.forusoul.com.utils;
 import android.support.annotation.VisibleForTesting;
 import android.util.Log;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Locale;
 
@@ -13,6 +15,34 @@ import java.util.Locale;
 
 public class ByteUtils {
     private static final String TAG = "ByteUtils";
+
+    public static int readInt32(ByteArrayInputStream inputStream) throws IOException {
+        byte[] bytes = new byte[4];
+        int readCount = inputStream.read(bytes);
+        if (readCount != 4) {
+            throw new IOException("readInt32(), Failed to read 4 bytes. Read count is " + readCount);
+        }
+        return bytes[0] & 0xff |
+                (bytes[1] & 0xff) << 8 |
+                (bytes[2] & 0xff) << 16 |
+                (bytes[3] & 0xff) << 24;
+    }
+
+    public static long readInt64(ByteArrayInputStream inputStream) throws IOException {
+        byte[] bytes = new byte[8];
+        int readCount = inputStream.read(bytes);
+        if (readCount != 8) {
+            throw new IOException("readInt64(), Failed to read 4 bytes. Read count is " + readCount);
+        }
+        return bytes[0] & 0xff |
+                (bytes[1] & 0xff) << 8 |
+                (bytes[2] & 0xff) << 16 |
+                (bytes[3] & 0xff) << 24 |
+                ((long)(bytes[4]) & 0xff) << 32 |
+                ((long)bytes[5] & 0xff) << 40 |
+                ((long)bytes[6] & 0xff) << 48 |
+                ((long)bytes[7] & 0xff) << 56;
+    }
 
     public static void writeByte(ByteArrayOutputStream outputStream, int value) {
         outputStream.write(convertInt8(value), 0, 1);

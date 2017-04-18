@@ -10,8 +10,6 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 
-import jelegram.forusoul.com.connection.ConnectionManager;
-
 /**
  * Manage Cipher logic
  */
@@ -21,8 +19,14 @@ public class CipherManager {
     private byte[] mInitializeKeyBuffer = null;
     private final byte[] mEncryptionKey = new byte[32];
     private final byte[] mEncryptionIv = new byte[16];
-    private final byte[] mCounterBuffer = new byte[16];
-    private final int[] mNumber = new int[1];
+    private final byte[] mEncryptionCounter = new byte[16];
+    private final int[] mEncryptionNumber = new int[1];
+
+    private final byte[] mDecryptionKey = new byte[32];
+    private final byte[] mDecryptionIv = new byte[16];
+    private final byte[] mDecryptionCounter = new byte[16];
+    private final int[] mDecryptionNumber = new int[1];
+
 
     private static class SingletonHolder {
         static final CipherManager INSTANCE = new CipherManager();
@@ -53,10 +57,22 @@ public class CipherManager {
         // setting key
         Arrays.fill(mEncryptionKey, (byte) 0);
         Arrays.fill(mEncryptionIv, (byte) 0);
-        Arrays.fill(mCounterBuffer, (byte) 0);
+        Arrays.fill(mEncryptionCounter, (byte) 0);
+        mEncryptionNumber[0] = 0;
         System.arraycopy(mInitializeKeyBuffer, 8, mEncryptionKey, 0, 32);
         System.arraycopy(mInitializeKeyBuffer, 40, mEncryptionIv, 0, 16);
-        mNumber[0] = 0;
+
+        byte[] decryptionBuffer = new byte[64];
+        for (int i = 0; i < 48; i++) {
+            decryptionBuffer[i] = mInitializeKeyBuffer[55 -i];
+        }
+
+        Arrays.fill(mDecryptionKey, (byte) 0);
+        Arrays.fill(mDecryptionIv, (byte) 0);
+        Arrays.fill(mDecryptionCounter, (byte) 0);
+        mDecryptionNumber[0] = 0;
+        System.arraycopy(decryptionBuffer, 0, mDecryptionKey, 0, 32);
+        System.arraycopy(decryptionBuffer, 32, mDecryptionIv, 0, 16);
     }
 
     public byte[] getInitializeKeyReportData()
@@ -84,7 +100,18 @@ public class CipherManager {
 
         final int length = in.length;
         byte[] out = new byte[length];
-        native_requestAesCtrEncrypt(in, out, length, mEncryptionKey, mEncryptionIv, mCounterBuffer, mNumber);
+        native_requestAesCtrEncrypt(in, out, length, mEncryptionKey, mEncryptionIv, mEncryptionCounter, mEncryptionNumber);
+        return out;
+    }
+
+    public byte[] decryptAesCtrModeNoPadding(byte[] in) {
+        if (in == null || in.length == 0) {
+            return null;
+        }
+
+        final int length = in.length;
+        byte[] out = new byte[length];
+        native_requestAesCtrEncrypt(in, out, length, mDecryptionKey, mDecryptionIv, mDecryptionCounter, mDecryptionNumber);
         return out;
     }
 

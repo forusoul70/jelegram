@@ -203,7 +203,6 @@ void ConnectionManager::sendRequest(ProtocolSendPtr request) {
 
     // wake up
     eventfd_write(mPollEventFd, 1);
-    LOGI(LOG_TAG, "wake up");
 }
 
 void ConnectionManager::processPendingSendRequest() {
