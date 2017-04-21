@@ -143,6 +143,8 @@ public class ConnectionManager {
                     Log.e(TAG, "We should receive remain data [" + decryptionMessage.length + "]");
                     return;
                 }
+
+                inputStream.mark(0);
                 inputStream.reset();
                 packLength = ByteUtils.readInt32(inputStream);
             }
