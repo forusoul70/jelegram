@@ -35,7 +35,7 @@ public class ReqDHParams implements IProtocol {
 
     @Override
     public int getConstructor() {
-        return (byte)0xd712e4be;
+        return 0xd712e4be;
     }
 
     @Override
