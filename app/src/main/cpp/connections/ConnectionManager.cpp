@@ -222,22 +222,30 @@ void ConnectionManager::processPendingSendRequest() {
         return;
     }
 
-    std::vector<ProtocolSendPtr>::iterator iterator = mPendingSendRequestTask.begin();
-    ProtocolSend * request = (*iterator).get();
-    NativeByteBuffer* requestBuffer = request->getBuffer();
-    ssize_t sendCount = send(mSocketFd, requestBuffer->bytes() + requestBuffer->position(), requestBuffer->remaining(), NULL);
-    if (sendCount < 0) {
-        LOGE(LOG_TAG, "processPendingSendRequest(), Failed to send");
-        closeConnection();
-        mPendingSendRequestTask.erase(iterator);
-        return;
+    std::vector<std::vector<ProtocolSendPtr>::iterator> completeList;
+    for (std::vector<ProtocolSendPtr>::iterator iterator = mPendingSendRequestTask.begin(); iterator != mPendingSendRequestTask.end(); ++iterator) {
+        ProtocolSend * request = (*iterator).get();
+        NativeByteBuffer* requestBuffer = request->getBuffer();
+        ssize_t sendCount = send(mSocketFd, requestBuffer->bytes() + requestBuffer->position(), requestBuffer->remaining(), NULL);
+        if (sendCount < 0) {
+            LOGE(LOG_TAG, "processPendingSendRequest(), Failed to send");
+            closeConnection();
+            mPendingSendRequestTask.erase(iterator);
+            return;
+        }
+
+        LOGD(LOG_TAG, "processPendingSendRequest(), send finished [%d] [%d]", sendCount, requestBuffer->limit());
+
+        requestBuffer->skip((uint32_t) sendCount);
+        if (requestBuffer->hasRemaining() == false) {
+            completeList.push_back(iterator);
+        }
+        sleep(1);
     }
 
-    LOGD(LOG_TAG, "processPendingSendRequest(), send finished [%d] [%d]", sendCount, requestBuffer->limit());
-
-    requestBuffer->skip((uint32_t) sendCount);
-    if (requestBuffer->hasRemaining() == false) {
-        mPendingSendRequestTask.erase(iterator);
+    // remove complete list
+    for (std::vector<std::vector<ProtocolSendPtr>::iterator>::iterator it = completeList.begin(); it != completeList.end(); ++it) {
+        mPendingSendRequestTask.erase(*it);
     }
 }
 

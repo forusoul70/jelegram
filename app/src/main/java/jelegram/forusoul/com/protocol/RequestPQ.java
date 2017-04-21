@@ -29,15 +29,6 @@ public class RequestPQ implements IProtocol {
 
     @Override
     public byte[] serializeSteam() {
-        // auth key_id ....
-        ByteUtils.writeInt64(mOutStream, 0);
-
-        // message id
-        ByteUtils.writeInt64(mOutStream, System.currentTimeMillis() / 1000L);
-
-        // message length (bytes)
-        ByteUtils.writeInt32(mOutStream, 20);
-
         // message constructor
         ByteUtils.writeInt32(mOutStream, getConstructor());
 

@@ -4,6 +4,9 @@ import android.support.annotation.NonNull;
 import android.util.Log;
 
 import java.io.InputStream;
+import java.security.SecureRandom;
+import java.util.Locale;
+import java.util.Random;
 
 import jelegram.forusoul.com.utils.ByteUtils;
 
@@ -13,8 +16,11 @@ import jelegram.forusoul.com.utils.ByteUtils;
 
 public class ResPQ implements IProtocol {
     private static final String TAG = "ResPQ";
+
     private final byte[] mNonce = new byte[16];
     private final byte[] mServerNonce = new byte[16];
+    private byte[] mPQ = null;
+    private long mServerPublicKeyFingerPrint = 0;
 
     @Override
     public int getConstructor() {
@@ -31,20 +37,52 @@ public class ResPQ implements IProtocol {
         try {
             int rc = stream.read(mNonce);
             if (rc != 16) {
-                Log.e(TAG, "readFromStream(), Failed to read nonce");
+                Log.e(TAG, "readFromStream(), Failed to read nonce [" + rc +"]");
                 return;
             }
 
             rc = stream.read(mServerNonce);
             if (rc != 16) {
-                Log.e(TAG, "readFromStream(), Failed to read server nonce");
+                Log.e(TAG, "readFromStream(), Failed to read server nonce [" + rc + "]");
                 return;
             }
 
+            mPQ = ByteUtils.readByteArray(stream);
+            if (mPQ == null || mPQ.length != 8) {
+                Log.e(TAG, "readFromStream(), Failed to pq [" + (mPQ == null ? 0 : mPQ.length) + "]");
+                return;
+            }
 
+            int magic = ByteUtils.readInt32(stream);
+            if (magic != 0x1cb5c415) {
+                Log.e(TAG, String.format(Locale.getDefault(),"readFromStream(), Invalid Vector magic [0x%x]", magic));
+                return;
+            }
 
+            int fingerPrintListCount = ByteUtils.readInt32(stream);
+            if (fingerPrintListCount != 1) {
+                Log.e(TAG, String.format(Locale.getDefault(),"readFromStream(), It should be invalid finger print count [%d]", fingerPrintListCount));
+                return;
+            }
+            mServerPublicKeyFingerPrint = ByteUtils.readInt64(stream);
         } catch (Exception e) {
             Log.e(TAG, "readFromStream()", e);
         }
+    }
+
+    public byte[] getPQ() {
+        return mPQ;
+    }
+
+    public byte[] getNonce() {
+        return mNonce;
+    }
+
+    public byte[] getServerNonce() {
+        return mServerNonce;
+    }
+
+    public long getServerPublicKeyFingerPrint() {
+        return mServerPublicKeyFingerPrint;
     }
 }

@@ -1,20 +1,43 @@
 package jelegram.forusoul.com.cipher;
 
+import android.util.Base64;
+import android.util.Log;
+
+import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
+import java.util.Locale;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.DHParameterSpec;
+
+import jelegram.forusoul.com.utils.ByteUtils;
 
 /**
  * Manage Cipher logic
  */
 
 public class CipherManager {
+    static {
+        System.loadLibrary("native-lib");
+    }
+
     private static final String TAG = "CipherManager";
     private byte[] mInitializeKeyBuffer = null;
     private final byte[] mEncryptionKey = new byte[32];
@@ -27,6 +50,7 @@ public class CipherManager {
     private final byte[] mDecryptionCounter = new byte[16];
     private final int[] mDecryptionNumber = new int[1];
 
+    private final ConcurrentHashMap<Long, String> mServerPublicKeyMap = new ConcurrentHashMap<>();
 
     private static class SingletonHolder {
         static final CipherManager INSTANCE = new CipherManager();
@@ -73,6 +97,40 @@ public class CipherManager {
         mDecryptionNumber[0] = 0;
         System.arraycopy(decryptionBuffer, 0, mDecryptionKey, 0, 32);
         System.arraycopy(decryptionBuffer, 32, mDecryptionIv, 0, 16);
+
+        // init server public key
+        mServerPublicKeyMap.put(0xc3b42b026ce86b21L, "-----BEGIN RSA PUBLIC KEY-----\n" +
+                "MIIBCgKCAQEAwVACPi9w23mF3tBkdZz+zwrzKOaaQdr01vAbU4E1pvkfj4sqDsm6\n" +
+                "lyDONS789sVoD/xCS9Y0hkkC3gtL1tSfTlgCMOOul9lcixlEKzwKENj1Yz/s7daS\n" +
+                "an9tqw3bfUV/nqgbhGX81v/+7RFAEd+RwFnK7a+XYl9sluzHRyVVaTTveB2GazTw\n" +
+                "Efzk2DWgkBluml8OREmvfraX3bkHZJTKX4EQSjBbbdJ2ZXIsRrYOXfaA+xayEGB+\n" +
+                "8hdlLmAjbCVfaigxX0CDqWeR1yFL9kwd9P0NsZRPsmoqVwMbMu7mStFai6aIhc3n\n" +
+                "Slv8kg9qv1m6XHVQY3PnEw+QQtqSIXklHwIDAQAB\n" +
+                "-----END RSA PUBLIC KEY-----");
+        mServerPublicKeyMap.put(0x9a996a1db11c729bL, "-----BEGIN RSA PUBLIC KEY-----\n" +
+                "MIIBCgKCAQEAxq7aeLAqJR20tkQQMfRn+ocfrtMlJsQ2Uksfs7Xcoo77jAid0bRt\n" +
+                "ksiVmT2HEIJUlRxfABoPBV8wY9zRTUMaMA654pUX41mhyVN+XoerGxFvrs9dF1Ru\n" +
+                "vCHbI02dM2ppPvyytvvMoefRoL5BTcpAihFgm5xCaakgsJ/tH5oVl74CdhQw8J5L\n" +
+                "xI/K++KJBUyZ26Uba1632cOiq05JBUW0Z2vWIOk4BLysk7+U9z+SxynKiZR3/xdi\n" +
+                "XvFKk01R3BHV+GUKM2RYazpS/P8v7eyKhAbKxOdRcFpHLlVwfjyM1VlDQrEZxsMp\n" +
+                "NTLYXb6Sce1Uov0YtNx5wEowlREH1WOTlwIDAQAB\n" +
+                "-----END RSA PUBLIC KEY-----");
+        mServerPublicKeyMap.put(0xb05b2a6f70cdea78L, "-----BEGIN RSA PUBLIC KEY-----\n" +
+                "MIIBCgKCAQEAsQZnSWVZNfClk29RcDTJQ76n8zZaiTGuUsi8sUhW8AS4PSbPKDm+\n" +
+                "DyJgdHDWdIF3HBzl7DHeFrILuqTs0vfS7Pa2NW8nUBwiaYQmPtwEa4n7bTmBVGsB\n" +
+                "1700/tz8wQWOLUlL2nMv+BPlDhxq4kmJCyJfgrIrHlX8sGPcPA4Y6Rwo0MSqYn3s\n" +
+                "g1Pu5gOKlaT9HKmE6wn5Sut6IiBjWozrRQ6n5h2RXNtO7O2qCDqjgB2vBxhV7B+z\n" +
+                "hRbLbCmW0tYMDsvPpX5M8fsO05svN+lKtCAuz1leFns8piZpptpSCFn7bWxiA9/f\n" +
+                "x5x17D7pfah3Sy2pA+NDXyzSlGcKdaUmwQIDAQAB\n" +
+                "-----END RSA PUBLIC KEY-----");
+        mServerPublicKeyMap.put(0x71e025b6c76033e3L, "-----BEGIN RSA PUBLIC KEY-----\n" +
+                "MIIBCgKCAQEAwqjFW0pi4reKGbkc9pK83Eunwj/k0G8ZTioMMPbZmW99GivMibwa\n" +
+                "xDM9RDWabEMyUtGoQC2ZcDeLWRK3W8jMP6dnEKAlvLkDLfC4fXYHzFO5KHEqF06i\n" +
+                "qAqBdmI1iBGdQv/OQCBcbXIWCGDY2AsiqLhlGQfPOI7/vvKc188rTriocgUtoTUc\n" +
+                "/n/sIUzkgwTqRyvWYynWARWzQg0I9olLBBC2q5RQJJlnYXZwyTL3y9tdb7zOHkks\n" +
+                "WV9IMQmZmyZh/N7sMbGWQpt4NMchGpPGeJ2e5gHBjDnlIf2p1yZOYeUYrdbwcS0t\n" +
+                "UiggS4UeE8TzIuXFQxw7fzEIlmhIaq3FnwIDAQAB\n" +
+                "-----END RSA PUBLIC KEY-----");
     }
 
     public byte[] getInitializeKeyReportData()
@@ -115,6 +173,49 @@ public class CipherManager {
         return out;
     }
 
-    public static native void native_requestAesCtrEncrypt(byte[] in, byte[] out, int length, byte[] encryptionKey, byte[] initializeVector, byte[] counterBuffer, int[] number);
+    public byte[] requestSha1(byte[] in) {
+        if (in == null || in.length == 0) {
+            return null;
+        }
 
+        try {
+            MessageDigest crypt = MessageDigest.getInstance("SHA-1");
+            crypt.reset();
+            crypt.update(in);
+            return crypt.digest();
+        } catch (Exception e) {
+            Log.e(TAG, "requestSha1()", e);
+            return null;
+        }
+    }
+
+    public byte[] requestEncryptRsa(long publicKeyFingerPrint, byte[] in) {
+        if (in == null || in.length == 0) {
+            return null;
+        }
+
+        String publicKey = mServerPublicKeyMap.get(publicKeyFingerPrint);
+        if (publicKey == null || publicKey.length() == 0) {
+            Log.e(TAG, String.format(Locale.getDefault(), "requestEncryptRsa(), Failed to find server public key [0x%x]", publicKeyFingerPrint));
+            return null;
+        }
+
+        byte[] encryptionData = native_requestRsaEncrypt(publicKey, in);
+        if (encryptionData == null || encryptionData.length == 0) {
+            Log.e(TAG, "requestEncryptRsa(), Failed to encryption");
+            return null;
+        }
+
+        return encryptionData;
+    }
+
+    public static int[] factorizePQ(byte[] pqValue) {
+        return native_requestFactorizePQ(pqValue);
+    }
+
+    private static native void native_requestAesCtrEncrypt(byte[] in, byte[] out, int length, byte[] encryptionKey, byte[] initializeVector, byte[] counterBuffer, int[] number);
+
+    private static native byte[] native_requestRsaEncrypt(String publicKey, byte[] in);
+
+    private static native int[] native_requestFactorizePQ(byte[] pqValue);
 }

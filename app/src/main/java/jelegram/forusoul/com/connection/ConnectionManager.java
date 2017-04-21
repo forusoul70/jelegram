@@ -5,10 +5,14 @@ import android.util.Log;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.Locale;
 
 import jelegram.forusoul.com.cipher.CipherManager;
 import jelegram.forusoul.com.protocol.IProtocol;
+import jelegram.forusoul.com.protocol.ReqDHParams;
+import jelegram.forusoul.com.protocol.ReqMessageAck;
 import jelegram.forusoul.com.protocol.RequestPQ;
+import jelegram.forusoul.com.protocol.ResPQ;
 import jelegram.forusoul.com.utils.ByteUtils;
 
 /**
@@ -24,6 +28,9 @@ public class ConnectionManager {
 
     private boolean mIsFirstPacketSent = false;
 
+    private static final Object AUTH_KEY_LOCK = new Object();
+    private long mAuthKey = 0;
+
     private static class SingletonHolder {
         static final ConnectionManager INSTANCE = new ConnectionManager();
     }
@@ -36,21 +43,42 @@ public class ConnectionManager {
         if (protocol == null) {
             return;
         }
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        // auth key_id ....
+        synchronized (AUTH_KEY_LOCK) {
+            ByteUtils.writeInt64(body, mAuthKey);
+        }
+
+        // message id
+        ByteUtils.writeInt64(body, System.currentTimeMillis() / 1000L);
+
+        // message
+        byte[] message = protocol.serializeSteam();
+        if (message == null || message.length == 0) {
+            Log.e(TAG, "sendRequest(), Failed to serialize stream");
+            return;
+        }
+        ByteUtils.writeInt32(body, message.length);
+        body.write(message);
+
+        ByteArrayOutputStream encryptedMessageStream = new ByteArrayOutputStream();
         if (mIsFirstPacketSent == false) {
-            buffer.write(CipherManager.getInstance().getInitializeKeyReportData());
+            encryptedMessageStream.write(CipherManager.getInstance().getInitializeKeyReportData());
             mIsFirstPacketSent = true;
         }
 
-        byte[] body = protocol.serializeSteam();
-        int packetLength = body.length / 4;
+        Log.i(TAG, "sending buffer");
+        ByteUtils.printByteBuffer(body.toByteArray());
+
+        int packetLength = body.size() / 4;
         if (packetLength < 0x7f) {
-            buffer.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(new byte[]{(byte) packetLength}));
+            encryptedMessageStream.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(new byte[]{(byte) packetLength}));
         } else {
-            buffer.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(ByteUtils.convertInt32(packetLength)));
+            encryptedMessageStream.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(ByteUtils.convertInt32(packetLength)));
         }
-        buffer.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(body));
-        native_send_request(buffer.toByteArray());
+        encryptedMessageStream.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(body.toByteArray()));
+        native_send_request(encryptedMessageStream.toByteArray());
     }
 
     private void onMessageReceived(@NonNull ByteArrayInputStream inputStream, int packLength) {
@@ -63,13 +91,33 @@ public class ConnectionManager {
             Log.d(TAG, "onMessageReceived(), auth key -- " + authKey);
             Log.d(TAG, "onMessageReceived(), message id -- " + messageId);
             Log.d(TAG, "onMessageReceived(), message length -- " + messageLength);
-            Log.d(TAG, "onMessageReceived(), constrcutor -- " + protocolConstructor);
+            Log.d(TAG, String.format(Locale.getDefault(), "onMessageReceived(), constructor -- 0x%x", protocolConstructor));
 
-            if (protocolConstructor == IProtocol.Constructor.ReqPQ.getConstructor()) {
-                RequestPQ requestPQ = new RequestPQ();
+            if (protocolConstructor == IProtocol.Constructor.ResPQ.getConstructor()) {
+                // first ack
+                ReqMessageAck ack = new ReqMessageAck(messageId);
+                sendRequest(ack);
+
+                ResPQ resPQ = new ResPQ();
+                resPQ.readFromStream(inputStream, messageLength);
+                executeDHKeyExchange(resPQ);
             }
         } catch (Exception e) {
             Log.e(TAG, "onByteReceived(), Failed to parse");
+        }
+    }
+
+    private void executeDHKeyExchange(ResPQ resPQ) {
+        if (resPQ == null) {
+            return;
+        }
+
+        // first ack
+        ReqDHParams reqDH = new ReqDHParams(resPQ.getNonce(), resPQ.getServerNonce(), resPQ.getPQ(), resPQ.getServerPublicKeyFingerPrint());
+        try {
+            sendRequest(reqDH);
+        } catch (Exception e) {
+            Log.e(TAG, "executeDHKeyExchange()", e);
         }
     }
 
@@ -106,11 +154,14 @@ public class ConnectionManager {
                 return;
             }
 
+            getInstance().onMessageReceived(inputStream, packLength);
+
+            Log.i(TAG, "data received");
             ByteUtils.printByteBuffer(decryptionMessage);
         } catch (Exception e) {
-            Log.e(TAG, "onByteReceived(), Failed to parse");
+            Log.e(TAG, "onByteReceived(), Failed to parse", e);
         }
     }
 
-    public static native void native_send_request(byte[] request);
+    private static native void native_send_request(byte[] request);
 }
