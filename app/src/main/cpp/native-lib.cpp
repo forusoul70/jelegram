@@ -116,7 +116,7 @@ Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestRsaEncrypt(JNIEnv
     RSA *rsaKey = PEM_read_bio_RSAPublicKey(keyBio, NULL, NULL, NULL);
     BN_CTX *bnContext = BN_CTX_new();
 
-    BIGNUM *a = BN_bin2bn((const uint8_t *) in, inputLength, NULL);
+    BIGNUM *a = BN_bin2bn((const uint8_t *) in, (size_t) inputLength, NULL);
     BIGNUM *r = BN_new();
     BN_mod_exp(r, a, rsaKey->e, rsaKey->n, bnContext);
     uint32_t size = BN_num_bytes(r);

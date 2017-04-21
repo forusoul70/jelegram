@@ -3,12 +3,9 @@ package jelegram.forusoul.com.protocol;
 import android.support.annotation.NonNull;
 import android.util.Log;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.math.BigInteger;
 import java.security.SecureRandom;
-import java.util.Random;
 
 import jelegram.forusoul.com.cipher.CipherManager;
 import jelegram.forusoul.com.utils.ByteUtils;
@@ -47,7 +44,7 @@ public class ReqDHParams implements IProtocol {
                 return null;
             }
             byte[] p = new byte[] {(byte)(pq[0] >> 24), (byte)(pq[0] >> 16), (byte)(pq[0] >> 8), (byte)(pq[0])};
-            byte[] q = new byte[] {(byte)(pq[1] >> 24), (byte)(pq[1] >> 16), (byte)(pq[1] >> 8), (byte)(pq[0])};
+            byte[] q = new byte[] {(byte)(pq[1] >> 24), (byte)(pq[1] >> 16), (byte)(pq[1] >> 8), (byte)(pq[1])};
 
             SecureRandom random = new SecureRandom();
             ByteUtils.writeInt32(mOutStream, getConstructor());
