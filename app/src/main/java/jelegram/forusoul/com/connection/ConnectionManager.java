@@ -11,7 +11,6 @@ import jelegram.forusoul.com.cipher.CipherManager;
 import jelegram.forusoul.com.protocol.IProtocol;
 import jelegram.forusoul.com.protocol.ReqDHParams;
 import jelegram.forusoul.com.protocol.ReqMessageAck;
-import jelegram.forusoul.com.protocol.RequestPQ;
 import jelegram.forusoul.com.protocol.ResPQ;
 import jelegram.forusoul.com.utils.ByteUtils;
 
@@ -131,6 +130,7 @@ public class ConnectionManager {
             // Decryption
             byte[] decryptionMessage = CipherManager.getInstance().decryptAesCtrModeNoPadding(message);
             ByteArrayInputStream inputStream = new ByteArrayInputStream(decryptionMessage);
+            inputStream.mark(-1); // mark position 0, -1 은 의미 없음
 
             // find packet length
             int packLength = 0;
@@ -144,9 +144,8 @@ public class ConnectionManager {
                     return;
                 }
 
-                inputStream.mark(0);
-                inputStream.reset();
-                packLength = ByteUtils.readInt32(inputStream);
+                inputStream.reset(); // reset position to 0
+                packLength = (ByteUtils.readInt32(inputStream) >> 8) * 4;
             }
 
             // check packet length validation
@@ -156,10 +155,10 @@ public class ConnectionManager {
                 return;
             }
 
-            getInstance().onMessageReceived(inputStream, packLength);
-
-            Log.i(TAG, "data received");
+            Log.i(TAG, "data received, packet length [" + packLength + "]");
             ByteUtils.printByteBuffer(decryptionMessage);
+
+            getInstance().onMessageReceived(inputStream, packLength);
         } catch (Exception e) {
             Log.e(TAG, "onByteReceived(), Failed to parse", e);
         }
