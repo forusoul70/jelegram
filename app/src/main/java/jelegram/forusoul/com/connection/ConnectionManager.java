@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.Locale;
 
+import jelegram.forusoul.com.BuildConfig;
 import jelegram.forusoul.com.cipher.CipherManager;
 import jelegram.forusoul.com.protocol.IProtocol;
 import jelegram.forusoul.com.protocol.ReqDHParams;
@@ -55,7 +56,9 @@ public class ConnectionManager {
         // message
         byte[] message = protocol.serializeSteam();
         if (message == null || message.length == 0) {
-            Log.e(TAG, "sendRequest(), Failed to serialize stream");
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "sendRequest(), Failed to serialize stream");
+            }
             return;
         }
         ByteUtils.writeInt32(body, message.length);
@@ -67,8 +70,11 @@ public class ConnectionManager {
             mIsFirstPacketSent = true;
         }
 
-        Log.i(TAG, "sending buffer");
-        ByteUtils.printByteBuffer(body.toByteArray());
+        if (BuildConfig.DEBUG) {
+            Log.i(TAG, "----------Send request ------------");
+            ByteUtils.printByteBuffer(body.toByteArray());
+            Log.i(TAG, "----------End request ------------");
+        }
 
         int packetLength = body.size() / 4;
         if (packetLength < 0x7f) {
@@ -87,10 +93,12 @@ public class ConnectionManager {
             int messageLength = ByteUtils.readInt32(inputStream);
             int protocolConstructor = ByteUtils.readInt32(inputStream);
 
-            Log.d(TAG, "onMessageReceived(), auth key -- " + authKey);
-            Log.d(TAG, "onMessageReceived(), message id -- " + messageId);
-            Log.d(TAG, "onMessageReceived(), message length -- " + messageLength);
-            Log.d(TAG, String.format(Locale.getDefault(), "onMessageReceived(), constructor -- 0x%x", protocolConstructor));
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "onMessageReceived(), auth key -- " + authKey);
+                Log.d(TAG, "onMessageReceived(), message id -- " + messageId);
+                Log.d(TAG, "onMessageReceived(), message length -- " + messageLength);
+                Log.d(TAG, String.format(Locale.getDefault(), "onMessageReceived(), constructor -- 0x%x", protocolConstructor));
+            }
 
             if (protocolConstructor == IProtocol.Constructor.ResPQ.getConstructor()) {
                 // first ack
@@ -116,13 +124,17 @@ public class ConnectionManager {
         try {
             sendRequest(reqDH);
         } catch (Exception e) {
-            Log.e(TAG, "executeDHKeyExchange()", e);
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeDHKeyExchange()", e);
+            }
         }
     }
 
     public static void onByteReceived(byte[] message) {
         if (message == null || message.length == 0) {
-            Log.e(TAG, "onByteReceived(), Input message is empty");
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "onByteReceived(), Input message is empty");
+            }
             return;
         }
 
@@ -140,27 +152,35 @@ public class ConnectionManager {
             } else {
                 if (decryptionMessage.length < 4) {
                     // TODO handle remain data;
-                    Log.e(TAG, "We should receive remain data [" + decryptionMessage.length + "]");
+                    if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "We should receive remain data [" + decryptionMessage.length + "]");
+                    }
                     return;
                 }
-
                 inputStream.reset(); // reset position to 0
                 packLength = (ByteUtils.readInt32(inputStream) >> 8) * 4;
             }
 
             // check packet length validation
             if (packLength > inputStream.available()) {
-                Log.e(TAG, String.format("onByteReceived(), Invalid packet length [%d] [%d]", packLength, inputStream.available()));
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, String.format("onByteReceived(), Invalid packet length [%d] [%d]", packLength, inputStream.available()));
+                }
                 // TODO handle remain data
                 return;
             }
 
-            Log.i(TAG, "data received, packet length [" + packLength + "]");
-            ByteUtils.printByteBuffer(decryptionMessage);
+            if (BuildConfig.DEBUG) {
+                Log.i(TAG, "----------Received message ------------");
+                ByteUtils.printByteBuffer(decryptionMessage);
+                Log.i(TAG, "----------End received ------------");
+            }
 
             getInstance().onMessageReceived(inputStream, packLength);
         } catch (Exception e) {
-            Log.e(TAG, "onByteReceived(), Failed to parse", e);
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "onByteReceived(), Failed to parse", e);
+            }
         }
     }
 

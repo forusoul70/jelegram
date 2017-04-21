@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.security.SecureRandom;
 
+import jelegram.forusoul.com.BuildConfig;
 import jelegram.forusoul.com.cipher.CipherManager;
 import jelegram.forusoul.com.utils.ByteUtils;
 
@@ -40,7 +41,9 @@ public class ReqDHParams implements IProtocol {
         try {
             int[] pq = CipherManager.factorizePQ(mPQ);
             if (pq == null || pq.length < 2) {
-                Log.e(TAG, "executeDHKeyExchange(), Failed to factorize pq ");
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "executeDHKeyExchange(), Failed to factorize pq ");
+                }
                 return null;
             }
             byte[] p = new byte[] {(byte)(pq[0] >> 24), (byte)(pq[0] >> 16), (byte)(pq[0] >> 8), (byte)(pq[0])};
@@ -60,13 +63,17 @@ public class ReqDHParams implements IProtocol {
             ReqPQInnerData innerReq = new ReqPQInnerData(mClientNonce, mServerNonce, mPQ, p, q);
             byte[] innerBytes = innerReq.serializeSteam();
             if (innerBytes == null || innerBytes.length == 0) {
-                Log.e(TAG, "executeDHKeyExchange(), Failed to serialize inner rq request");
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "executeDHKeyExchange(), Failed to serialize inner rq request");
+                }
                 return null;
             }
 
             byte[] messageDigest = CipherManager.getInstance().requestSha1(innerBytes);
             if (messageDigest == null || messageDigest.length == 0) {
-                Log.e(TAG, "executeDHKeyExchange(), Failed to make message digest");
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "executeDHKeyExchange(), Failed to make message digest");
+                }
                 return null;
             }
 
@@ -78,13 +85,17 @@ public class ReqDHParams implements IProtocol {
 
             byte[] rasEncryption = CipherManager.getInstance().requestEncryptRsa(mServerPublicKeyFingerPrint, innerOutputStream.toByteArray());
             if (rasEncryption == null || rasEncryption.length == 0) {
-                Log.e(TAG, "serializeSteam(), Failed to rsa encryption");
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "serializeSteam(), Failed to rsa encryption");
+                }
                 return null;
             }
             ByteUtils.writeByteAndLength(mOutStream, rasEncryption);
             return mOutStream.toByteArray();
         } catch (Exception e) {
-            Log.e(TAG, "serializeSteam()", e);
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "serializeSteam()", e);
+            }
             return null;
         }
     }

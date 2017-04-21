@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.SecureRandom;
 
+import jelegram.forusoul.com.BuildConfig;
 import jelegram.forusoul.com.utils.ByteUtils;
 
 /**
@@ -37,7 +38,9 @@ public class RequestPQ implements IProtocol {
         try {
             mOutStream.write(mNonce);
         } catch (IOException e) {
-            Log.e(TAG, "I/O exception ", e);
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "I/O exception ", e);
+            }
             return null;
         }
         return mOutStream.toByteArray();

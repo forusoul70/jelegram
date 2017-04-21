@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.security.SecureRandom;
 
+import jelegram.forusoul.com.BuildConfig;
 import jelegram.forusoul.com.utils.ByteUtils;
 
 /**
@@ -50,7 +51,9 @@ public class ReqPQInnerData implements IProtocol {
             mOutStream.write(random.generateSeed(32));
             return mOutStream.toByteArray();
         } catch (Exception e) {
-            Log.e(TAG, "serializeSteam()", e);
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "serializeSteam()", e);
+            }
             return null;
         }
     }

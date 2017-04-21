@@ -1,5 +1,6 @@
 package jelegram.forusoul.com.cipher;
 
+import android.support.compat.BuildConfig;
 import android.util.Log;
 
 import java.security.InvalidAlgorithmParameterException;
@@ -170,7 +171,9 @@ public class CipherManager {
             crypt.update(in);
             return crypt.digest();
         } catch (Exception e) {
-            Log.e(TAG, "requestSha1()", e);
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "requestSha1()", e);
+            }
             return null;
         }
     }
@@ -182,13 +185,17 @@ public class CipherManager {
 
         String publicKey = mServerPublicKeyMap.get(publicKeyFingerPrint);
         if (publicKey == null || publicKey.length() == 0) {
-            Log.e(TAG, String.format(Locale.getDefault(), "requestEncryptRsa(), Failed to find server public key [0x%x]", publicKeyFingerPrint));
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, String.format(Locale.getDefault(), "requestEncryptRsa(), Failed to find server public key [0x%x]", publicKeyFingerPrint));
+            }
             return null;
         }
 
         byte[] encryptionData = native_requestRsaEncrypt(publicKey, in);
         if (encryptionData == null || encryptionData.length == 0) {
-            Log.e(TAG, "requestEncryptRsa(), Failed to encryption");
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "requestEncryptRsa(), Failed to encryption");
+            }
             return null;
         }
 

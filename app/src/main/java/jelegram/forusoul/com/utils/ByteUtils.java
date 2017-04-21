@@ -3,14 +3,12 @@ package jelegram.forusoul.com.utils;
 import android.support.annotation.VisibleForTesting;
 import android.util.Log;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.security.acl.LastOwnerException;
-import java.util.Arrays;
 import java.util.Locale;
+
+import jelegram.forusoul.com.BuildConfig;
 
 /**
  * Byte utils
@@ -59,7 +57,9 @@ public class ByteUtils {
         int padding = (4 - totalLength % 4);
         if (padding > 0 && padding < 4) {
             if ((rc = (int) inputStream.skip(padding)) != padding) {  // consume padding
-                Log.e(TAG, "readByteArray(), Failed to consume padding. padding count is " + padding + ", but " + rc);
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "readByteArray(), Failed to consume padding. padding count is " + padding + ", but " + rc);
+                }
             }
         }
         return bytes;
@@ -144,22 +144,24 @@ public class ByteUtils {
     }
 
     public static void printByteBuffer(byte[] buffer) {
-        // Debug
-        StringBuilder builder = new StringBuilder();
-        int index = 0;
-        while (index < buffer.length) {
-            for (int i=0; i < 8; i++) {
-                if (index >= buffer.length) {
-                    break;
+        if (BuildConfig.DEBUG) {
+            // Debug
+            StringBuilder builder = new StringBuilder();
+            int index = 0;
+            while (index < buffer.length) {
+                for (int i = 0; i < 8; i++) {
+                    if (index >= buffer.length) {
+                        break;
+                    }
+                    builder.append(String.format(Locale.getDefault(), "0x%02x", buffer[index]));
+                    builder.append(" ");
+                    index++;
                 }
-                builder.append(String.format(Locale.getDefault(), "0x%02x", buffer[index]));
-                builder.append(" ");
-                index++;
+                builder.append("\n");
             }
-            builder.append("\n");
+            Log.d(TAG, builder.toString());
+            Log.d(TAG, "[" + buffer.length + "]");
         }
-        Log.d(TAG, builder.toString());
-        Log.d(TAG, "[" + buffer.length + "]");
     }
 
     @VisibleForTesting
