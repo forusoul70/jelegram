@@ -107,14 +107,14 @@ public class ConnectionManager {
 
                 ResPQ resPQ = new ResPQ();
                 resPQ.readFromStream(inputStream, messageLength);
-                executeDHKeyExchange(resPQ);
+                executeRequestDHParam(resPQ);
             }
         } catch (Exception e) {
             Log.e(TAG, "onByteReceived(), Failed to parse");
         }
     }
 
-    private void executeDHKeyExchange(ResPQ resPQ) {
+    private void executeRequestDHParam(ResPQ resPQ) {
         if (resPQ == null) {
             return;
         }
@@ -125,9 +125,13 @@ public class ConnectionManager {
             sendRequest(reqDH);
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
-                Log.e(TAG, "executeDHKeyExchange()", e);
+                Log.e(TAG, "executeRequestDHParam()", e);
             }
         }
+    }
+
+    private void executeOnResponseDHParam() {
+
     }
 
     public static void onByteReceived(byte[] message) {
