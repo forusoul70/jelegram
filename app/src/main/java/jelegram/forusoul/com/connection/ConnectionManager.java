@@ -12,6 +12,7 @@ import jelegram.forusoul.com.cipher.CipherManager;
 import jelegram.forusoul.com.protocol.IProtocol;
 import jelegram.forusoul.com.protocol.ReqDHParams;
 import jelegram.forusoul.com.protocol.ReqMessageAck;
+import jelegram.forusoul.com.protocol.ResDHParam;
 import jelegram.forusoul.com.protocol.ResPQ;
 import jelegram.forusoul.com.utils.ByteUtils;
 
@@ -29,6 +30,8 @@ public class ConnectionManager {
     private boolean mIsFirstPacketSent = false;
 
     private static final Object AUTH_KEY_LOCK = new Object();
+
+    private byte[] mNewNonce = null;
     private long mAuthKey = 0;
 
     private static class SingletonHolder {
@@ -78,11 +81,11 @@ public class ConnectionManager {
 
         int packetLength = body.size() / 4;
         if (packetLength < 0x7f) {
-            encryptedMessageStream.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(new byte[]{(byte) packetLength}));
+            encryptedMessageStream.write(CipherManager.getInstance().encryptAesMessage(new byte[]{(byte) packetLength}));
         } else {
-            encryptedMessageStream.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(ByteUtils.convertInt32(packetLength)));
+            encryptedMessageStream.write(CipherManager.getInstance().encryptAesMessage(ByteUtils.convertInt32(packetLength)));
         }
-        encryptedMessageStream.write(CipherManager.getInstance().encryptAesCtrModeNoPadding(body.toByteArray()));
+        encryptedMessageStream.write(CipherManager.getInstance().encryptAesMessage(body.toByteArray()));
         native_send_request(encryptedMessageStream.toByteArray());
     }
 
@@ -108,6 +111,16 @@ public class ConnectionManager {
                 ResPQ resPQ = new ResPQ();
                 resPQ.readFromStream(inputStream, messageLength);
                 executeRequestDHParam(resPQ);
+            } else if (protocolConstructor == IProtocol.Constructor.ResDH.getConstructor()) {
+                if (mNewNonce == null || mNewNonce.length == 0) {
+                    if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "onMessageReceived(), Current new nonce is empty");
+                    }
+                    return;
+                }
+                ResDHParam resDHParam = new ResDHParam(mNewNonce);
+                resDHParam.readFromStream(inputStream, messageLength);
+                executeOnResponseDHParam(resDHParam);
             }
         } catch (Exception e) {
             Log.e(TAG, "onByteReceived(), Failed to parse");
@@ -123,6 +136,7 @@ public class ConnectionManager {
         ReqDHParams reqDH = new ReqDHParams(resPQ.getNonce(), resPQ.getServerNonce(), resPQ.getPQ(), resPQ.getServerPublicKeyFingerPrint());
         try {
             sendRequest(reqDH);
+            mNewNonce = reqDH.getNewNonce();
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "executeRequestDHParam()", e);
@@ -130,7 +144,7 @@ public class ConnectionManager {
         }
     }
 
-    private void executeOnResponseDHParam() {
+    private void executeOnResponseDHParam(ResDHParam resDHParam) {
 
     }
 

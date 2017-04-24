@@ -1,6 +1,5 @@
 package jelegram.forusoul.com.utils;
 
-import android.support.annotation.VisibleForTesting;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
@@ -43,7 +42,7 @@ public class ByteUtils {
         int totalLength = 1;
         int length = inputStream.read();
         if (length >= 0xfe) {
-            length = length | inputStream.read() << 8 | inputStream.read() << 16;
+            length = inputStream.read() | inputStream.read() << 8 | inputStream.read() << 16;
             totalLength += 3;
         }
         totalLength += length;
@@ -164,13 +163,8 @@ public class ByteUtils {
         }
     }
 
-    @VisibleForTesting
-    public static boolean isEqualBytes(byte[] a, byte[] b) {
-        if (a.length != b.length) {
-            return false;
-        }
-
-        for (int i=0; i<a.length; i++) {
+    public static boolean isEqualBytes(byte[] a, byte[] b, int length) {
+        for (int i=0; i < length; i++) {
             if (a[i] != b[i]) {
                 return false;
             }

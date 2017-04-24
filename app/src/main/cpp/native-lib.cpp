@@ -2,6 +2,7 @@
 #include "logging.h"
 #include "connections/ConnectionManager.h"
 #include "javaWrap.h"
+#include "openssl/crypto.h"
 #include "openssl/aes.h"
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
@@ -187,6 +188,50 @@ Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestFactorizePQ(JNIEn
     env->ReleaseByteArrayElements(pqValue_, pqValue, 0);
 
     return pqArray;
+}
+
+extern "C"
+JNIEXPORT jbyteArray JNICALL
+Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestDecryptAesIge(JNIEnv *env, jclass type, jbyteArray in_, jbyteArray key_, jbyteArray iv_) {
+    jbyte *in = env->GetByteArrayElements(in_, NULL);
+    jbyte *key = env->GetByteArrayElements(key_, NULL);
+    jbyte *iv = env->GetByteArrayElements(iv_, NULL);
+    int inputLength = env->GetArrayLength(in_);
+    int ivLength = env->GetArrayLength(iv_);
+
+    if (in == nullptr || inputLength == 0) {
+        LOGE(LOG_TAG, "Input buffer is empty");
+        return nullptr;
+    }
+
+    if (iv == nullptr || ivLength != 32) {
+        LOGE(LOG_TAG, "Invalid initialize vector length [%d]", ivLength);
+        return nullptr;
+    }
+
+    uint8_t *cloneIv = new uint8_t[32];
+    memcpy(cloneIv, iv, (size_t) ivLength);
+
+    // make out buffer
+    uint8_t *out = new uint8_t[inputLength];
+    memcpy(out, in, (size_t) inputLength);
+
+    // aes ige mode
+    AES_KEY aesKey;
+    AES_set_decrypt_key((const uint8_t *) key, 32 * 8, &aesKey);
+    AES_ige_encrypt((const uint8_t*)in, out, (size_t) inputLength, &aesKey, cloneIv, AES_DECRYPT);
+
+    jbyteArray decryptedData = env->NewByteArray(inputLength);
+    if (decryptedData == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate java buffer [%d]", inputLength);
+        return nullptr;
+    }
+    env->SetByteArrayRegion(decryptedData, 0, inputLength, reinterpret_cast<jbyte*>(out));
+
+    env->ReleaseByteArrayElements(in_, in, 0);
+    env->ReleaseByteArrayElements(key_, key, 0);
+    env->ReleaseByteArrayElements(iv_, iv, 0);
+    return decryptedData;
 }
 
 jint JNI_OnLoad(JavaVM *vm, void *reserved) {

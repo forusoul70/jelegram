@@ -162,6 +162,16 @@ OPENSSL_EXPORT int AES_unwrap_key(const AES_KEY *key, const uint8_t *iv,
                                   uint8_t *out, const uint8_t *in,
                                   size_t in_len);
 
+/* NB: the IV is _two_ blocks long */
+OPENSSL_EXPORT void AES_ige_encrypt(const unsigned char *in, unsigned char *out,
+                                    size_t length, const AES_KEY *key,
+                                    unsigned char *ivec, const int enc);
+/* NB: the IV is _four_ blocks long */
+OPENSSL_EXPORT void AES_bi_ige_encrypt(const unsigned char *in, unsigned char *out,
+                                       size_t length, const AES_KEY *key,
+                                       const AES_KEY *key2, const unsigned char *ivec,
+                                       const int enc);
+
 
 #if defined(__cplusplus)
 }  /* extern C */

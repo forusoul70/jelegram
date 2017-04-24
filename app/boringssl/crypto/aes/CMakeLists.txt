@@ -53,6 +53,7 @@ add_library(
   OBJECT
 
   aes.c
+  aes_ige.c
   key_wrap.c
   mode_wrappers.c
 

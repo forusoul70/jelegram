@@ -1,12 +1,10 @@
 package jelegram.forusoul.com.cipher;
 
-import android.util.Base64;
-
 import org.junit.Test;
 
-import jelegram.forusoul.com.utils.ByteUtils;
+import java.util.Arrays;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Test Cipher
@@ -93,6 +91,6 @@ public class CipherManagerTest {
                 (byte)0x9b, (byte)0xa4, (byte)0x28, (byte)0x93, (byte)0x58, (byte)0x57, (byte)0xa4, (byte)0x08, 
         };
 
-        assertEquals(true, ByteUtils.isEqualBytes(after, CipherManager.getInstance().requestEncryptRsa(0xc3b42b026ce86b21L, prev)));
+        assertEquals(true, Arrays.equals(after, CipherManager.getInstance().requestEncryptRsa(0xc3b42b026ce86b21L, prev)));
     }
 }

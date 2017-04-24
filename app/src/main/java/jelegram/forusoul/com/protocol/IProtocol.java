@@ -11,7 +11,9 @@ import java.io.InputStream;
 public interface IProtocol {
     public enum Constructor {
         ReqPQ(0x60469778),
-        ResPQ(0x05162463);
+        ResPQ(0x05162463),
+        ResDH(0xd0e8075c),
+        ResDHInner(0xb5890dba);
 
         private final int mValue;
         Constructor(int value) {
@@ -25,5 +27,5 @@ public interface IProtocol {
 
     int getConstructor();
     byte[] serializeSteam();
-    void readFromStream(@NonNull InputStream stream, int length);
+    void readFromStream(@NonNull InputStream stream, int length) throws Exception;
 }

@@ -26,6 +26,8 @@ public class CipherManager {
     }
 
     private static final String TAG = "CipherManager";
+    public static final int SHA_DIGEST_LENGTH = 20;
+
     private byte[] mInitializeKeyBuffer = null;
     private final byte[] mEncryptionKey = new byte[32];
     private final byte[] mEncryptionIv = new byte[16];
@@ -131,12 +133,28 @@ public class CipherManager {
         System.arraycopy(mInitializeKeyBuffer, 0, initKeyBuffer, 0, mInitializeKeyBuffer.length);
 
         // encrypt
-        byte[] encryptionKeyBuffer = encryptAesCtrModeNoPadding(initKeyBuffer);
+        byte[] encryptionKeyBuffer = encryptAesMessage(initKeyBuffer);
         System.arraycopy(encryptionKeyBuffer, 56, initKeyBuffer, 56, 8);
         return initKeyBuffer;
     }
 
-    public byte[] encryptAesCtrModeNoPadding(byte[] in)
+    public byte[] decryptAesIge(byte[] in, byte[] key, byte[] iv) {
+        if (in == null || in.length == 0) {
+            return null;
+        }
+
+        if (key == null || key.length == 0) {
+            return null;
+        }
+
+        if (iv == null || iv.length == 0) {
+            return null;
+        }
+
+        return native_requestDecryptAesIge(in, key, iv);
+    }
+
+    public byte[] encryptAesMessage(byte[] in)
             throws InvalidAlgorithmParameterException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException, BadPaddingException, IllegalBlockSizeException {
 
         if (in == null || in.length == 0) {
@@ -211,4 +229,6 @@ public class CipherManager {
     private static native byte[] native_requestRsaEncrypt(String publicKey, byte[] in);
 
     private static native int[] native_requestFactorizePQ(byte[] pqValue);
+
+    private static native byte[] native_requestDecryptAesIge(byte[] in, byte[] key, byte[] iv);
 }

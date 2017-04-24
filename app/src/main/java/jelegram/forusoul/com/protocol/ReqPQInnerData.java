@@ -23,6 +23,7 @@ public class ReqPQInnerData implements IProtocol {
     private final byte[] mMultiplyPQ;
     private final byte[] mP;
     private final byte[] mQ;
+    private byte[] mNewNonce = null;
 
     public ReqPQInnerData(byte[] clientNonce, byte[] serverNonce, byte[] multiplyPQ, byte[] p, byte[] q) {
         mClientNonce = clientNonce;
@@ -48,7 +49,9 @@ public class ReqPQInnerData implements IProtocol {
             ByteUtils.writeByteAndLength(mOutStream, mQ);
             mOutStream.write(mClientNonce);
             mOutStream.write(mServerNonce);
-            mOutStream.write(random.generateSeed(32));
+
+            mNewNonce = random.generateSeed(32);
+            mOutStream.write(mNewNonce);
             return mOutStream.toByteArray();
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
@@ -61,5 +64,9 @@ public class ReqPQInnerData implements IProtocol {
     @Override
     public void readFromStream(@NonNull InputStream stream, int length) {
 
+    }
+
+    public byte[] getNewNonce() {
+        return mNewNonce;
     }
 }

@@ -22,6 +22,8 @@ public class ReqDHParams implements IProtocol {
     private final byte[] mPQ;
     private final long mServerPublicKeyFingerPrint;
 
+    private ReqPQInnerData mInnerData = null;
+
     private ByteArrayOutputStream mOutStream = new ByteArrayOutputStream();
 
     public ReqDHParams(byte[] clientNonce, byte[] serverNonce, byte[] pq, long serverPublicKeyFingerPrint) {
@@ -60,8 +62,8 @@ public class ReqDHParams implements IProtocol {
 
             // Inner data
             ByteArrayOutputStream innerOutputStream = new ByteArrayOutputStream();
-            ReqPQInnerData innerReq = new ReqPQInnerData(mClientNonce, mServerNonce, mPQ, p, q);
-            byte[] innerBytes = innerReq.serializeSteam();
+            mInnerData = new ReqPQInnerData(mClientNonce, mServerNonce, mPQ, p, q);
+            byte[] innerBytes = mInnerData.serializeSteam();
             if (innerBytes == null || innerBytes.length == 0) {
                 if (BuildConfig.DEBUG) {
                     Log.e(TAG, "executeDHKeyExchange(), Failed to serialize inner rq request");
@@ -103,5 +105,9 @@ public class ReqDHParams implements IProtocol {
     @Override
     public void readFromStream(@NonNull InputStream stream, int length) {
 
+    }
+
+    public byte[] getNewNonce() {
+        return mInnerData != null ? mInnerData.getNewNonce() : null;
     }
 }
