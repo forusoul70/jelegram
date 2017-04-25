@@ -32,7 +32,12 @@ public class ResDHParam implements IProtocol {
     private final byte[] mNewNonce = new byte[32];
     private final byte[] mClientNonce = new byte[16];
     private final byte[] mServerNonce = new byte[16];
+
+    private byte[] mDecryptionKey = null;
+    private byte[] mDecryptionIV = null;
     private byte[] mDecryptedAnswer = null;
+
+    private ResDHInnerData mInnerData = null;
 
     public ResDHParam(byte[] newNonce) throws DHParamException {
         if (newNonce == null || newNonce.length != 32) {
@@ -111,9 +116,9 @@ public class ResDHParam implements IProtocol {
             aseKeyAndIv.write(mNewNonce, 0, 4);
 
             byte[] aseKeyAndIvBuffer = aseKeyAndIv.toByteArray();
-            mDecryptedAnswer =  CipherManager.getInstance().decryptAesIge(encryptedAnswer,
-                    Arrays.copyOfRange(aseKeyAndIvBuffer, 0, 32),
-                    Arrays.copyOfRange(aseKeyAndIvBuffer, 32, 64));
+            mDecryptionKey = Arrays.copyOfRange(aseKeyAndIvBuffer, 0, 32);
+            mDecryptionIV = Arrays.copyOfRange(aseKeyAndIvBuffer, 32, 64);
+            mDecryptedAnswer =  CipherManager.getInstance().decryptAesIge(encryptedAnswer, mDecryptionKey, mDecryptionIV);
             if (mDecryptedAnswer == null || mDecryptedAnswer.length == 0) {
                 throw new DHParamException("Failed decrypt answer");
             }
@@ -143,14 +148,8 @@ public class ResDHParam implements IProtocol {
                 throw new DHParamException("Can't parse magic DH inner data [" + innerConstructor + "]");
             }
 
-            ResDHInnerData innerData = new ResDHInnerData();
-            innerData.readFromStream(innerStream, innerStream.available());
-
-            // TODO remove log..
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "readFromStream finished");
-            }
-
+            mInnerData = new ResDHInnerData();
+            mInnerData.readFromStream(innerStream, innerStream.available());
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "readFromStream()", e);
@@ -167,4 +166,23 @@ public class ResDHParam implements IProtocol {
         return mServerNonce;
     }
 
+    public byte[] getDHPrime() {
+        return mInnerData == null ? null : mInnerData.getDHPrime();
+    }
+
+    public byte[] getGA() {
+        return mInnerData == null ? null : mInnerData.getGA();
+    }
+
+    public int getG() {
+        return mInnerData == null ? -1 : mInnerData.getG();
+    }
+
+    public byte[] getDecryptionKey() {
+        return mDecryptionKey;
+    }
+
+    public byte[] getDecryptionIV() {
+        return mDecryptionIV;
+    }
 }

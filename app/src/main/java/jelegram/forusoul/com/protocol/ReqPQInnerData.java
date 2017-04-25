@@ -5,7 +5,6 @@ import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.security.SecureRandom;
 
 import jelegram.forusoul.com.BuildConfig;
 import jelegram.forusoul.com.utils.ByteUtils;
@@ -20,14 +19,15 @@ public class ReqPQInnerData implements IProtocol {
 
     private final byte[] mClientNonce;
     private final byte[] mServerNonce;
+    private final byte[] mNewNonce;
     private final byte[] mMultiplyPQ;
     private final byte[] mP;
     private final byte[] mQ;
-    private byte[] mNewNonce = null;
 
-    public ReqPQInnerData(byte[] clientNonce, byte[] serverNonce, byte[] multiplyPQ, byte[] p, byte[] q) {
+    public ReqPQInnerData(byte[] clientNonce, byte[] serverNonce, byte[] newNonce, byte[] multiplyPQ, byte[] p, byte[] q) {
         mClientNonce = clientNonce;
         mServerNonce = serverNonce;
+        mNewNonce = newNonce;
         mMultiplyPQ = multiplyPQ;
         mP = p;
         mQ = q;
@@ -41,16 +41,12 @@ public class ReqPQInnerData implements IProtocol {
     @Override
     public byte[] serializeSteam() {
         try {
-            SecureRandom random = new SecureRandom();
-
             ByteUtils.writeInt32(mOutStream, getConstructor());
             ByteUtils.writeByteAndLength(mOutStream, mMultiplyPQ);
             ByteUtils.writeByteAndLength(mOutStream, mP);
             ByteUtils.writeByteAndLength(mOutStream, mQ);
             mOutStream.write(mClientNonce);
             mOutStream.write(mServerNonce);
-
-            mNewNonce = random.generateSeed(32);
             mOutStream.write(mNewNonce);
             return mOutStream.toByteArray();
         } catch (Exception e) {
@@ -64,9 +60,5 @@ public class ReqPQInnerData implements IProtocol {
     @Override
     public void readFromStream(@NonNull InputStream stream, int length) {
 
-    }
-
-    public byte[] getNewNonce() {
-        return mNewNonce;
     }
 }

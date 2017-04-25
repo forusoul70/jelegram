@@ -6,7 +6,6 @@ import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.SecureRandom;
 
 import jelegram.forusoul.com.BuildConfig;
 import jelegram.forusoul.com.utils.ByteUtils;
@@ -18,10 +17,12 @@ import jelegram.forusoul.com.utils.ByteUtils;
 public class RequestPQ implements IProtocol {
     private static final String TAG = "RequestPQ";
 
-    private static final SecureRandom sRandom = new SecureRandom();
-    private final int CONSTUCTOR = 0x60469778;
-    private final byte[] mNonce = sRandom.generateSeed(16);
+    private final byte[] mClientNonce;
     private ByteArrayOutputStream mOutStream = new ByteArrayOutputStream();
+
+    public RequestPQ(byte[] clientNonce) {
+        mClientNonce = clientNonce;
+    }
 
     @Override
     public int getConstructor() {
@@ -32,11 +33,8 @@ public class RequestPQ implements IProtocol {
     public byte[] serializeSteam() {
         // message constructor
         ByteUtils.writeInt32(mOutStream, getConstructor());
-
-        // random
-        sRandom.nextBytes(mNonce);
         try {
-            mOutStream.write(mNonce);
+            mOutStream.write(mClientNonce);
         } catch (IOException e) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "I/O exception ", e);

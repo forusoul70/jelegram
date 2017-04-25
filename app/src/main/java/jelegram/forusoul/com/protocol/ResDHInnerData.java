@@ -67,4 +67,24 @@ public class ResDHInnerData implements IProtocol {
 
         mServerTime = ByteUtils.readInt32(stream);
     }
+
+    public byte[] getClientNonce() {
+        return mClientNonce;
+    }
+
+    public byte[] getServerNonce() {
+        return mServerNonce;
+    }
+
+    public byte[] getDHPrime() {
+        return mDHPrime;
+    }
+
+    public byte[] getGA() {
+        return mGA;
+    }
+
+    public int getG() {
+        return mG;
+    }
 }

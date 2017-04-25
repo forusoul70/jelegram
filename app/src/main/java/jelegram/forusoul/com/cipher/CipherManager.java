@@ -154,6 +154,22 @@ public class CipherManager {
         return native_requestDecryptAesIge(in, key, iv);
     }
 
+    public byte[] encryptAesIge(byte[] in, byte[] key, byte[] iv) {
+        if (in == null || in.length == 0) {
+            return null;
+        }
+
+        if (key == null || key.length == 0) {
+            return null;
+        }
+
+        if (iv == null || iv.length == 0) {
+            return null;
+        }
+
+        return native_requestEncryptAesIge(in, key, iv);
+    }
+
     public byte[] encryptAesMessage(byte[] in)
             throws InvalidAlgorithmParameterException, InvalidKeyException, NoSuchPaddingException, NoSuchAlgorithmException, BadPaddingException, IllegalBlockSizeException {
 
@@ -220,6 +236,22 @@ public class CipherManager {
         return encryptionData;
     }
 
+    public byte[] requestCalculateDiffieHellmanGB(byte[] prime, int g, byte[] ga) {
+        if (prime == null || prime.length == 0) {
+            return null;
+        }
+
+        if (g <= 0) {
+            return null;
+        }
+
+        if (ga == null || ga.length == 0) {
+            return null;
+        }
+
+        return native_requestCalculateDiffieHellmanGB(prime, g, ga);
+    }
+
     public static int[] factorizePQ(byte[] pqValue) {
         return native_requestFactorizePQ(pqValue);
     }
@@ -231,4 +263,8 @@ public class CipherManager {
     private static native int[] native_requestFactorizePQ(byte[] pqValue);
 
     private static native byte[] native_requestDecryptAesIge(byte[] in, byte[] key, byte[] iv);
+
+    private static native byte[] native_requestEncryptAesIge(byte[] in, byte[] key, byte[] iv);
+
+    private static native byte[] native_requestCalculateDiffieHellmanGB(byte[] prime, int g, byte[] ga);
 }

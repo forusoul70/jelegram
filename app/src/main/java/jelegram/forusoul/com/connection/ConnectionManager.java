@@ -5,13 +5,17 @@ import android.util.Log;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Locale;
 
 import jelegram.forusoul.com.BuildConfig;
 import jelegram.forusoul.com.cipher.CipherManager;
 import jelegram.forusoul.com.protocol.IProtocol;
+import jelegram.forusoul.com.protocol.ReqDHClient;
 import jelegram.forusoul.com.protocol.ReqDHParams;
 import jelegram.forusoul.com.protocol.ReqMessageAck;
+import jelegram.forusoul.com.protocol.RequestPQ;
 import jelegram.forusoul.com.protocol.ResDHParam;
 import jelegram.forusoul.com.protocol.ResPQ;
 import jelegram.forusoul.com.utils.ByteUtils;
@@ -27,12 +31,18 @@ public class ConnectionManager {
 
     private static final String TAG = "ConnectionManager";
 
+    private final SecureRandom mSecureRandom = new SecureRandom();
+
     private boolean mIsFirstPacketSent = false;
+    private byte[] mClientNonce = null;
+    private byte[] mServerNonce = null;
+    private byte[] mNewNonce = null;
 
     private static final Object AUTH_KEY_LOCK = new Object();
-
-    private byte[] mNewNonce = null;
     private long mAuthKey = 0;
+
+    private final Object HANDSHAKE_STATE_LOCK = new Object();
+    private boolean mIsHandshakeFinished = false;
 
     private static class SingletonHolder {
         static final ConnectionManager INSTANCE = new ConnectionManager();
@@ -42,7 +52,11 @@ public class ConnectionManager {
         return SingletonHolder.INSTANCE;
     }
 
-    public void sendRequest(IProtocol protocol) throws Exception {
+    private ConnectionManager() {
+        executeBeginHandshake();
+    }
+
+    private void sendRequest(IProtocol protocol) throws Exception {
         if (protocol == null) {
             return;
         }
@@ -83,6 +97,7 @@ public class ConnectionManager {
         if (packetLength < 0x7f) {
             encryptedMessageStream.write(CipherManager.getInstance().encryptAesMessage(new byte[]{(byte) packetLength}));
         } else {
+            packetLength = (packetLength << 8) + 0x7f;
             encryptedMessageStream.write(CipherManager.getInstance().encryptAesMessage(ByteUtils.convertInt32(packetLength)));
         }
         encryptedMessageStream.write(CipherManager.getInstance().encryptAesMessage(body.toByteArray()));
@@ -108,9 +123,12 @@ public class ConnectionManager {
                 ReqMessageAck ack = new ReqMessageAck(messageId);
                 sendRequest(ack);
 
-                ResPQ resPQ = new ResPQ();
-                resPQ.readFromStream(inputStream, messageLength);
-                executeRequestDHParam(resPQ);
+                synchronized (HANDSHAKE_STATE_LOCK) {
+                    ResPQ resPQ = new ResPQ();
+                    resPQ.readFromStream(inputStream, messageLength);
+                    mServerNonce = resPQ.getServerNonce();
+                    executeRequestDHParam(resPQ);
+                }
             } else if (protocolConstructor == IProtocol.Constructor.ResDH.getConstructor()) {
                 if (mNewNonce == null || mNewNonce.length == 0) {
                     if (BuildConfig.DEBUG) {
@@ -118,12 +136,32 @@ public class ConnectionManager {
                     }
                     return;
                 }
-                ResDHParam resDHParam = new ResDHParam(mNewNonce);
-                resDHParam.readFromStream(inputStream, messageLength);
-                executeOnResponseDHParam(resDHParam);
+
+                synchronized (HANDSHAKE_STATE_LOCK) {
+                    ResDHParam resDHParam = new ResDHParam(mNewNonce);
+                    resDHParam.readFromStream(inputStream, messageLength);
+                    executeOnResponseDHParam(resDHParam, messageId);
+                }
             }
         } catch (Exception e) {
             Log.e(TAG, "onByteReceived(), Failed to parse");
+        }
+    }
+
+    private void executeBeginHandshake() {
+        synchronized (HANDSHAKE_STATE_LOCK) {
+            if (mIsHandshakeFinished == false) {
+                SecureRandom random = new SecureRandom();
+                mClientNonce = random.generateSeed(16);
+                RequestPQ requestPQ = new RequestPQ(mClientNonce);
+                try {
+                    sendRequest(requestPQ);
+                } catch (Exception e) {
+                    if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "executeBeginHandshake()", e);
+                    }
+                }
+            }
         }
     }
 
@@ -132,11 +170,10 @@ public class ConnectionManager {
             return;
         }
 
-        // first ack
-        ReqDHParams reqDH = new ReqDHParams(resPQ.getNonce(), resPQ.getServerNonce(), resPQ.getPQ(), resPQ.getServerPublicKeyFingerPrint());
         try {
+            mNewNonce = mSecureRandom.generateSeed(32);
+            ReqDHParams reqDH = new ReqDHParams(resPQ.getNonce(), resPQ.getServerNonce(), mNewNonce, resPQ.getPQ(), resPQ.getServerPublicKeyFingerPrint());
             sendRequest(reqDH);
-            mNewNonce = reqDH.getNewNonce();
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "executeRequestDHParam()", e);
@@ -144,8 +181,53 @@ public class ConnectionManager {
         }
     }
 
-    private void executeOnResponseDHParam(ResDHParam resDHParam) {
+    private void executeOnResponseDHParam(ResDHParam resDHParam, long messageId) {
+        if (resDHParam == null) {
+            return;
+        }
 
+        if (Arrays.equals(mClientNonce, resDHParam.getClientNonce()) == false) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeOnResponseDHParam(), invalid client nonce");
+            }
+            return;
+        }
+
+        if (Arrays.equals(mServerNonce, resDHParam.getServerNonce()) == false) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeOnResponseDHParam(), invalid server nonce");
+            }
+            return;
+        }
+
+        // find g^b mod p
+        byte[] gB = CipherManager.getInstance().requestCalculateDiffieHellmanGB(resDHParam.getDHPrime(), resDHParam.getG(), resDHParam.getGA());
+        if (gB == null || gB.length == 0) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeOnResponseDHParam(), Failed to calculate gb");
+            }
+            return;
+        }
+
+        // first ack
+        ReqMessageAck ack = new ReqMessageAck(messageId);
+        try {
+            sendRequest(ack);
+        } catch (Exception e) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeOnResponseDHParam(), Failed to send ack");
+            }
+            return;
+        }
+
+        ReqDHClient dhClient = new ReqDHClient(mClientNonce, mServerNonce, gB, resDHParam.getDecryptionKey(), resDHParam.getDecryptionIV());
+        try {
+            sendRequest(dhClient);
+        } catch (Exception e) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeOnResponseDHParam(), Failed to send dh exchange client");
+            }
+        }
     }
 
     public static void onByteReceived(byte[] message) {

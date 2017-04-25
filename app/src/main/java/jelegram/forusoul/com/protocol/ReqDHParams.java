@@ -20,16 +20,18 @@ public class ReqDHParams implements IProtocol {
     private final byte[] mClientNonce;
     private final byte[] mServerNonce;
     private final byte[] mPQ;
+    private final byte[] mNewNonce;
     private final long mServerPublicKeyFingerPrint;
 
     private ReqPQInnerData mInnerData = null;
 
     private ByteArrayOutputStream mOutStream = new ByteArrayOutputStream();
 
-    public ReqDHParams(byte[] clientNonce, byte[] serverNonce, byte[] pq, long serverPublicKeyFingerPrint) {
+    public ReqDHParams(byte[] clientNonce, byte[] serverNonce, byte[] newNonce, byte[] pq, long serverPublicKeyFingerPrint) {
         mClientNonce = clientNonce;
         mServerNonce = serverNonce;
         mPQ = pq;
+        mNewNonce = newNonce;
         mServerPublicKeyFingerPrint = serverPublicKeyFingerPrint;
     }
 
@@ -62,7 +64,7 @@ public class ReqDHParams implements IProtocol {
 
             // Inner data
             ByteArrayOutputStream innerOutputStream = new ByteArrayOutputStream();
-            mInnerData = new ReqPQInnerData(mClientNonce, mServerNonce, mPQ, p, q);
+            mInnerData = new ReqPQInnerData(mClientNonce, mServerNonce, mNewNonce, mPQ, p, q);
             byte[] innerBytes = mInnerData.serializeSteam();
             if (innerBytes == null || innerBytes.length == 0) {
                 if (BuildConfig.DEBUG) {
@@ -105,9 +107,5 @@ public class ReqDHParams implements IProtocol {
     @Override
     public void readFromStream(@NonNull InputStream stream, int length) {
 
-    }
-
-    public byte[] getNewNonce() {
-        return mInnerData != null ? mInnerData.getNewNonce() : null;
     }
 }
