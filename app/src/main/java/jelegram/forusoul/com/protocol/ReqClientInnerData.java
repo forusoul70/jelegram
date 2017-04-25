@@ -44,15 +44,17 @@ public class ReqClientInnerData implements IProtocol {
         }
 
         try {
-            ByteUtils.writeInt32(mOutputStream, getConstructor());
-            mOutputStream.write(mClientNonce);
-            mOutputStream.write(mServerNonce);
-            ByteUtils.writeInt64(mOutputStream, mRetryCount);
-            ByteUtils.writeByteAndLength(mOutputStream, mGb);
+            ByteArrayOutputStream innerDataStream = new ByteArrayOutputStream();
+            ByteUtils.writeInt32(innerDataStream, getConstructor());
+            innerDataStream.write(mClientNonce);
+            innerDataStream.write(mServerNonce);
+            ByteUtils.writeInt64(innerDataStream, mRetryCount);
+            ByteUtils.writeByteAndLength(innerDataStream, mGb);
 
-            byte[] innerData = mOutputStream.toByteArray();
+            byte[] innerData = innerDataStream.toByteArray();
             // message digest
             mOutputStream.write(CipherManager.getInstance().requestSha1(innerData));
+            mOutputStream.write(innerData);
             // message padding
             int paddingSize = (innerData.length + CipherManager.SHA_DIGEST_LENGTH) % 16;
             if (paddingSize > 0) {
