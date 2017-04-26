@@ -252,6 +252,22 @@ public class CipherManager {
         return native_requestCalculateDiffieHellmanGB(prime, g, ga);
     }
 
+    public byte[] requestCalculateModExp(byte[] in, byte[] prime, byte[] m) {
+        if (in == null || in.length == 0) {
+            return null;
+        }
+
+        if (prime == null || prime.length == 0) {
+            return null;
+        }
+
+        if (m == null || m.length == 0) {
+            return null;
+        }
+
+    }
+
+
     public static int[] factorizePQ(byte[] pqValue) {
         return native_requestFactorizePQ(pqValue);
     }
@@ -266,5 +282,5 @@ public class CipherManager {
 
     private static native byte[] native_requestEncryptAesIge(byte[] in, byte[] key, byte[] iv);
 
-    private static native byte[] native_requestCalculateDiffieHellmanGB(byte[] prime, int g, byte[] ga);
+    private static native byte[][] native_requestCalculateDiffieHellmanGB(byte[] prime, int g, byte[] ga);
 }

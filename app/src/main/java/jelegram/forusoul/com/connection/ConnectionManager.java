@@ -5,6 +5,7 @@ import android.util.Log;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Locale;
@@ -16,6 +17,7 @@ import jelegram.forusoul.com.protocol.ReqDHClient;
 import jelegram.forusoul.com.protocol.ReqDHParams;
 import jelegram.forusoul.com.protocol.ReqMessageAck;
 import jelegram.forusoul.com.protocol.RequestPQ;
+import jelegram.forusoul.com.protocol.ResDHGenOk;
 import jelegram.forusoul.com.protocol.ResDHParam;
 import jelegram.forusoul.com.protocol.ResPQ;
 import jelegram.forusoul.com.utils.ByteUtils;
@@ -36,7 +38,8 @@ public class ConnectionManager {
     private boolean mIsFirstPacketSent = false;
     private byte[] mClientNonce = null;
     private byte[] mServerNonce = null;
-    private byte[] mNewNonce = null;
+    private byte[] mAuthNewNonce = null;
+    private byte[] mHandshakeAuthKey = null;
 
     private static final Object AUTH_KEY_LOCK = new Object();
     private long mAuthKey = 0;
@@ -130,7 +133,7 @@ public class ConnectionManager {
                     executeRequestDHParam(resPQ);
                 }
             } else if (protocolConstructor == IProtocol.Constructor.ResDH.getConstructor()) {
-                if (mNewNonce == null || mNewNonce.length == 0) {
+                if (mAuthNewNonce == null || mAuthNewNonce.length == 0) {
                     if (BuildConfig.DEBUG) {
                         Log.e(TAG, "onMessageReceived(), Current new nonce is empty");
                     }
@@ -138,9 +141,29 @@ public class ConnectionManager {
                 }
 
                 synchronized (HANDSHAKE_STATE_LOCK) {
-                    ResDHParam resDHParam = new ResDHParam(mNewNonce);
+                    ResDHParam resDHParam = new ResDHParam(mAuthNewNonce);
                     resDHParam.readFromStream(inputStream, messageLength);
                     executeOnResponseDHParam(resDHParam, messageId);
+                }
+            } else if (protocolConstructor == IProtocol.Constructor.ResDHGenOK.getConstructor()) {
+                if (mClientNonce == null || mClientNonce.length == 0 || mServerNonce == null || mServerNonce.length == 0) {
+                    if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "onMessageReceived(), Current  client or server nonce is empty");
+                    }
+                    return;
+                }
+
+                if (mAuthNewNonce == null || mAuthNewNonce.length == 0) {
+                    if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "onMessageReceived(), Current new nonce is empty");
+                    }
+                    return;
+                }
+
+                synchronized (HANDSHAKE_STATE_LOCK) {
+                    ResDHGenOk resDHGenOk = new ResDHGenOk();
+                    resDHGenOk.readFromStream(inputStream, messageLength);
+                    executeOnDHGenerateSuccess(resDHGenOk, messageId);
                 }
             }
         } catch (Exception e) {
@@ -171,8 +194,8 @@ public class ConnectionManager {
         }
 
         try {
-            mNewNonce = mSecureRandom.generateSeed(32);
-            ReqDHParams reqDH = new ReqDHParams(resPQ.getNonce(), resPQ.getServerNonce(), mNewNonce, resPQ.getPQ(), resPQ.getServerPublicKeyFingerPrint());
+            mAuthNewNonce = mSecureRandom.generateSeed(32);
+            ReqDHParams reqDH = new ReqDHParams(resPQ.getNonce(), resPQ.getServerNonce(), mAuthNewNonce, resPQ.getPQ(), resPQ.getServerPublicKeyFingerPrint());
             sendRequest(reqDH);
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
@@ -223,11 +246,50 @@ public class ConnectionManager {
         ReqDHClient dhClient = new ReqDHClient(mClientNonce, mServerNonce, gB, resDHParam.getDecryptionKey(), resDHParam.getDecryptionIV());
         try {
             sendRequest(dhClient);
+
+            // init handshake auth key
+            mHandshakeAuthKey = new byte[256];
+
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "executeOnResponseDHParam(), Failed to send dh exchange client");
             }
         }
+    }
+
+    private void executeOnDHGenerateSuccess(ResDHGenOk resDHGenOk, long messageId) throws IOException {
+        if (resDHGenOk == null) {
+            return;
+        }
+
+        if (Arrays.equals(mClientNonce, resDHGenOk.getClientNonce()) == false) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeOnDHGenerateSuccess(), invalid client nonce");
+            }
+            return;
+        }
+
+        if (Arrays.equals(mServerNonce, resDHGenOk.getServerNonce()) == false) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeOnDHGenerateSuccess(), invalid server nonce");
+            }
+            return;
+        }
+
+        // first send ack
+        try {
+            sendRequest(new ReqMessageAck(messageId));
+        } catch (Exception e) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "executeOnDHGenerateSuccess(), Failed to send ack");
+            }
+            return;
+        }
+
+        ByteArrayOutputStream authKeyAuxHashBuffer = new ByteArrayOutputStream();
+        authKeyAuxHashBuffer.write(mAuthNewNonce);
+        authKeyAuxHashBuffer.write(1);
+
     }
 
     public static void onByteReceived(byte[] message) {

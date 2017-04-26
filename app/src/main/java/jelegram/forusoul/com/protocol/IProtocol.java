@@ -15,7 +15,8 @@ public interface IProtocol {
         ResDH(0xd0e8075c),
         ResDHInner(0xb5890dba),
         ReqDH(0xf5045f1f),
-        ReqDHInner(0x6643b654);
+        ReqDHInner(0x6643b654),
+        ResDHGenOK(0x3bcbf734);
 
         private final int mValue;
         Constructor(int value) {

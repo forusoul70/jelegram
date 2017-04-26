@@ -75,15 +75,8 @@ Java_jelegram_forusoul_com_connection_ConnectionManager_native_1send_1request(JN
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestAesCtrEncrypt(JNIEnv *env,
-                                                                             jclass type,
-                                                                             jbyteArray in_,
-                                                                             jbyteArray out_,
-                                                                             jint length,
-                                                                             jbyteArray encryptionKey_,
-                                                                             jbyteArray initializeVector_,
-                                                                             jbyteArray counterBuffer_,
-                                                                             jintArray number_) {
+Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestAesCtrEncrypt(JNIEnv *env, jclass type, jbyteArray in_, jbyteArray out_, jint length, jbyteArray encryptionKey_,
+                                                                             jbyteArray initializeVector_, jbyteArray counterBuffer_, jintArray number_) {
     jbyte *in = env->GetByteArrayElements(in_, NULL);
     jbyte *out = env->GetByteArrayElements(out_, NULL);
     jbyte *encryptionKey = env->GetByteArrayElements(encryptionKey_, NULL);
@@ -290,105 +283,20 @@ Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestEncryptAesIge(JNI
     return decryptedData;
 }
 
-
 extern "C"
-JNIEXPORT jbyteArray JNICALL
-Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestCalculateDiffieHellmanGB(JNIEnv *env, jclass type, jbyteArray prime_, jint g_, jbyteArray ga_) {
-    uint8_t *primeBytes = (uint8_t *) env->GetByteArrayElements(prime_, NULL);
-    uint8_t *gaBytes = (uint8_t *) env->GetByteArrayElements(ga_, NULL);
-    size_t primeLength = (size_t) env->GetArrayLength(prime_);
-    size_t gaLength = (size_t) env->GetArrayLength(ga_);
+JNIEXPORT jobjectArray JNICALL
+Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestCalculateDiffieHellmanGB(JNIEnv *env,
+                                                                                        jclass type,
+                                                                                        jbyteArray prime_,
+                                                                                        jint g,
+                                                                                        jbyteArray ga_) {
+    jbyte *prime = env->GetByteArrayElements(prime_, NULL);
+    jbyte *ga = env->GetByteArrayElements(ga_, NULL);
 
-    if (primeBytes == nullptr || primeLength == 0) {
-        LOGE(LOG_TAG, "Input prime is empty");
-        return nullptr;
-    }
+    // TODO
 
-    BIGNUM *bigP = BN_bin2bn(primeBytes, primeLength, NULL);
-    if (bigP == nullptr) {
-        LOGE(LOG_TAG, "Failed to allocate Big number");
-        BN_free(bigP);
-        return nullptr;
-    }
-
-    if (isGoodPrime(bigP, (uint32_t) g_) == false) {
-        LOGE(LOG_TAG, "Is not good prime");
-        BN_free(bigP);
-        return nullptr;
-    }
-
-    BIGNUM *bigGA = BN_new();
-    if (bigGA == nullptr) {
-        LOGE(LOG_TAG, "Failed to allocate big number [ga]");
-        BN_free(bigP);
-        return nullptr;
-    }
-
-    BN_bin2bn(gaBytes, gaLength, bigGA);
-    if (isGoodGaAndGb(bigGA, bigP) == false) {
-        LOGE(LOG_TAG, "Bad prime and g_a");
-        BN_free(bigP);
-        BN_free(bigGA);
-        return nullptr;
-    }
-
-    BIGNUM *bigG = BN_new();
-    if (bigG == nullptr) {
-        LOGE(LOG_TAG, "Failed to allocate big number [g]");
-        BN_free(bigP);
-        BN_free(bigGA);
-        return nullptr;
-    }
-
-    if (BN_set_word(bigG, (uint32_t) g_) == false) {
-        LOGE(LOG_TAG, "failed to call BN_set_word()");
-        BN_free(bigP);
-        BN_free(bigGA);
-        return nullptr;
-    }
-
-    uint8_t byteB[256];
-    RAND_bytes(byteB, 256);
-    BIGNUM *bigB = BN_bin2bn(byteB, 256, NULL);
-    if (bigB == nullptr) {
-        LOGE(LOG_TAG, "Failed to allocate big number [b]");
-        BN_free(bigP);
-        BN_free(bigGA);
-        BN_free(bigG);
-        return nullptr;
-    }
-
-    BIGNUM *bigGB = BN_new();
-    if (BN_mod_exp(bigGB, bigG, bigB, bigP, bnContext) == false) {
-        LOGE(LOG_TAG, "Failed to call BN_mode_exp");
-        BN_free(bigP);
-        BN_free(bigGA);
-        BN_free(bigG);
-        BN_free(bigGB);
-        return nullptr;
-    }
-
-    size_t gbLength = BN_num_bytes(bigGB);
-    uint8_t *gbBytes = new uint8_t[gbLength];
-    BN_bn2bin(bigGB, gaBytes);
-    jbyteArray gbJavaBuffer = env->NewByteArray(gbLength);
-    if (gbJavaBuffer == nullptr) {
-        LOGE(LOG_TAG, "Failed to allocate java buffer [%d]", gbLength);
-        return nullptr;
-    }
-    env->SetByteArrayRegion(gbJavaBuffer, 0, gbLength, reinterpret_cast<jbyte*>(gbBytes));
-
-    // release
-    env->ReleaseByteArrayElements(prime_, (jbyte *) primeBytes, 0);
-    env->ReleaseByteArrayElements(ga_, (jbyte *) gaBytes, 0);
-
-    delete[] gaBytes;
-    BN_free(bigP);
-    BN_free(bigGA);
-    BN_free(bigG);
-    BN_free(bigGB);
-
-    return gbJavaBuffer;
+    env->ReleaseByteArrayElements(prime_, prime, 0);
+    env->ReleaseByteArrayElements(ga_, ga, 0);
 }
 
 jint JNI_OnLoad(JavaVM *vm, void *reserved) {
