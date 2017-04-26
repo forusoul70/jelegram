@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
 
@@ -224,13 +225,15 @@ public class ConnectionManager {
         }
 
         // find g^b mod p
-        byte[] gB = CipherManager.getInstance().requestCalculateDiffieHellmanGB(resDHParam.getDHPrime(), resDHParam.getG(), resDHParam.getGA());
-        if (gB == null || gB.length == 0) {
+        ArrayList<byte[]> gAndGbResult = CipherManager.getInstance().requestCalculateDiffieHellmanGB(resDHParam.getDHPrime(), resDHParam.getG(), resDHParam.getGA());
+        if (gAndGbResult == null || gAndGbResult.isEmpty()) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "executeOnResponseDHParam(), Failed to calculate gb");
             }
             return;
         }
+        byte[] g = gAndGbResult.get(0);
+        byte[] gB = gAndGbResult.get(1);
 
         // first ack
         ReqMessageAck ack = new ReqMessageAck(messageId);

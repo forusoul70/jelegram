@@ -284,22 +284,181 @@ Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestEncryptAesIge(JNI
 }
 
 extern "C"
-JNIEXPORT jobjectArray JNICALL
-Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestCalculateDiffieHellmanGB(JNIEnv *env,
-                                                                                        jclass type,
-                                                                                        jbyteArray prime_,
-                                                                                        jint g,
-                                                                                        jbyteArray ga_) {
-    jbyte *prime = env->GetByteArrayElements(prime_, NULL);
-    jbyte *ga = env->GetByteArrayElements(ga_, NULL);
+JNIEXPORT void JNICALL
+Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestCalculateDiffieHellmanGB(JNIEnv *env, jclass type, jbyteArray prime_, jint g,
+                                                                                        jbyteArray ga_, jobject callback) {
+    // callback
+    jclass callbackInterface = env->GetObjectClass(callback);
+    jmethodID callbackMethod = env->GetMethodID(callbackInterface, "onFinished", "([B[B)V");
 
-    // TODO
+    uint8_t *primeBytes = (uint8_t *) env->GetByteArrayElements(prime_, NULL);
+    uint8_t *gaBytes = (uint8_t *) env->GetByteArrayElements(ga_, NULL);
+    size_t primeLength = (size_t) env->GetArrayLength(prime_);
+    size_t gaLength = (size_t) env->GetArrayLength(ga_);
 
-    env->ReleaseByteArrayElements(prime_, prime, 0);
-    env->ReleaseByteArrayElements(ga_, ga, 0);
+    if (primeBytes == nullptr || primeLength == 0) {
+        LOGE(LOG_TAG, "Input prime is empty");
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    BIGNUM *bigP = BN_bin2bn(primeBytes, primeLength, NULL);
+    if (bigP == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate Big number");
+        BN_free(bigP);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    if (isGoodPrime(bigP, (uint32_t) g) == false) {
+        LOGE(LOG_TAG, "Is not good prime");
+        BN_free(bigP);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    BIGNUM *bigGA = BN_new();
+    if (bigGA == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate big number [ga]");
+        BN_free(bigP);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    BN_bin2bn(gaBytes, gaLength, bigGA);
+    if (isGoodGaAndGb(bigGA, bigP) == false) {
+        LOGE(LOG_TAG, "Bad prime and g_a");
+        BN_free(bigP);
+        BN_free(bigGA);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    BIGNUM *bigG = BN_new();
+    if (bigG == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate big number [g]");
+        BN_free(bigP);
+        BN_free(bigGA);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    if (BN_set_word(bigG, (uint32_t) g) == false) {
+        LOGE(LOG_TAG, "failed to call BN_set_word()");
+        BN_free(bigP);
+        BN_free(bigGA);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    uint8_t byteB[256];
+    RAND_bytes(byteB, 256);
+    BIGNUM *bigB = BN_bin2bn(byteB, 256, NULL);
+    if (bigB == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate big number [b]");
+        BN_free(bigP);
+        BN_free(bigGA);
+        BN_free(bigG);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    BIGNUM *bigGB = BN_new();
+    if (BN_mod_exp(bigGB, bigG, bigB, bigP, bnContext) == false) {
+        LOGE(LOG_TAG, "Failed to call BN_mode_exp");
+        BN_free(bigP);
+        BN_free(bigGA);
+        BN_free(bigG);
+        BN_free(bigGB);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    size_t gbLength = BN_num_bytes(bigGB);
+    uint8_t *gbBytes = new uint8_t[gbLength];
+    BN_bn2bin(bigGB, gaBytes);
+
+    jbyteArray outB = env->NewByteArray(256);
+    if (outB == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate java buffer [256]");
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    jbyteArray outGB = env->NewByteArray(gbLength);
+    if (outGB == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate java buffer [%d]", gbLength);
+        env->CallVoidMethod(callback, callbackMethod, nullptr, nullptr);
+        return;
+    }
+
+    // set result
+    env->SetByteArrayRegion(outB, 0, 256, reinterpret_cast<jbyte*>(byteB));
+    env->SetByteArrayRegion(outGB, 0, gbLength, reinterpret_cast<jbyte*>(gbBytes));
+
+    // release
+    env->ReleaseByteArrayElements(prime_, (jbyte *) primeBytes, 0);
+    env->ReleaseByteArrayElements(ga_, (jbyte *) gaBytes, 0);
+
+    delete[] gaBytes;
+    BN_free(bigP);
+    BN_free(bigGA);
+    BN_free(bigG);
+    BN_free(bigGB);
+
+    env->CallVoidMethod(callback, callbackMethod, outB, outGB);
 }
 
-jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+extern "C"
+JNIEXPORT jbyteArray JNICALL
+Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestCalculateModExp(JNIEnv *env, jclass type, jbyteArray in_, jbyteArray prime_, jbyteArray mod_) {
+    jbyte *in = env->GetByteArrayElements(in_, NULL);
+    jbyte *prime = env->GetByteArrayElements(prime_, NULL);
+    jbyte *mod = env->GetByteArrayElements(mod_, NULL);
+    size_t aLength = (size_t) env->GetArrayLength(in_);
+    size_t primeLength = (size_t) env->GetArrayLength(prime_);
+    size_t modLength = (size_t) env->GetArrayLength(mod_);
+
+    BIGNUM *a = BN_bin2bn((const uint8_t *) in, aLength, NULL);
+    if (a == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate big number");
+        return nullptr;
+    }
+
+    BIGNUM *p = BN_bin2bn((const uint8_t *) prime, primeLength, NULL);
+    if (p == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate big number");
+        return nullptr;
+    }
+    BIGNUM *m = BN_bin2bn((const uint8_t *) mod, modLength, NULL);
+    if (m == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate big number");
+        return nullptr;
+    }
+
+    BIGNUM *r = BN_new();
+    BN_mod_exp(r, a, p, m, bnContext);
+    size_t rLength = BN_num_bytes(r);
+    uint8_t *rBuffer = new uint8_t(rLength);
+
+    jbyteArray rJava = env->NewByteArray(rLength);
+    if (rJava == nullptr) {
+        LOGE(LOG_TAG, "Failed to allocate java buffer [%d]", rLength);
+        return nullptr;
+    }
+    env->SetByteArrayRegion(rJava, 0, rLength, reinterpret_cast<jbyte*>(rBuffer));
+
+    env->ReleaseByteArrayElements(in_, in, 0);
+    env->ReleaseByteArrayElements(prime_, prime, 0);
+    env->ReleaseByteArrayElements(mod_, mod, 0);
+
+    delete[] rBuffer;
+
+    return rJava;
+}
+
+
+int JNI_OnLoad(JavaVM *vm, void *reserved) {
     LOGI("native-lib", "JNI_OnLoad");
     bnContext = BN_CTX_new();
     initialize(vm);
@@ -498,4 +657,5 @@ bool check_prime(BIGNUM *p) {
     }
     return result != 0;
 }
+
 #undef LOG_TAG

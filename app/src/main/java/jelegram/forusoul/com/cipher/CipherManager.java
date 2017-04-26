@@ -8,9 +8,12 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
@@ -236,7 +239,7 @@ public class CipherManager {
         return encryptionData;
     }
 
-    public byte[] requestCalculateDiffieHellmanGB(byte[] prime, int g, byte[] ga) {
+    public ArrayList<byte[]> requestCalculateDiffieHellmanGB(byte[] prime, int g, final byte[] ga) {
         if (prime == null || prime.length == 0) {
             return null;
         }
@@ -249,7 +252,25 @@ public class CipherManager {
             return null;
         }
 
-        return native_requestCalculateDiffieHellmanGB(prime, g, ga);
+        final ArrayList<byte[]> calculateResult = new ArrayList<>();
+        final CountDownLatch waitCallbackLatch = new CountDownLatch(1);
+        native_requestCalculateDiffieHellmanGB(prime, g, ga, new CalculateDiffieHellmanGBCallback() {
+            @Override
+            public void onFinished(byte[] b, byte[] gb) {
+                if (b != null && b.length > 0 && gb != null && gb.length > 0) {
+                    calculateResult.add(b);
+                    calculateResult.add(gb);
+                }
+                waitCallbackLatch.countDown();
+            }
+        });
+        try {
+            waitCallbackLatch.await(1, TimeUnit.MINUTES);
+        } catch (InterruptedException ignore) {
+
+        }
+
+        return calculateResult;
     }
 
     public byte[] requestCalculateModExp(byte[] in, byte[] prime, byte[] m) {
@@ -265,6 +286,7 @@ public class CipherManager {
             return null;
         }
 
+        return native_requestCalculateModExp(in, prime, m);
     }
 
 
@@ -282,5 +304,11 @@ public class CipherManager {
 
     private static native byte[] native_requestEncryptAesIge(byte[] in, byte[] key, byte[] iv);
 
-    private static native byte[][] native_requestCalculateDiffieHellmanGB(byte[] prime, int g, byte[] ga);
+    private interface CalculateDiffieHellmanGBCallback {
+        void onFinished(byte[] b, byte[] gb);
+    }
+
+    private static native void native_requestCalculateDiffieHellmanGB(byte[] prime, int g, byte[] ga, CalculateDiffieHellmanGBCallback callback);
+
+    private static native byte[] native_requestCalculateModExp(byte[] in, byte[] prime, byte[] mod);
 }
