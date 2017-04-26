@@ -272,7 +272,7 @@ Java_jelegram_forusoul_com_cipher_CipherManager_native_1requestEncryptAesIge(JNI
     // aes ige mode
     AES_KEY aesKey;
     AES_set_encrypt_key((const uint8_t *) key, 32 * 8, &aesKey);
-    AES_ige_encrypt((const uint8_t*)in, out, (size_t) inputLength, &aesKey, cloneIv, AES_DECRYPT);
+    AES_ige_encrypt((const uint8_t*)in, out, (size_t) inputLength, &aesKey, cloneIv, AES_ENCRYPT);
 
     jbyteArray decryptedData = env->NewByteArray(inputLength);
     if (decryptedData == nullptr) {

@@ -25,7 +25,7 @@ public class ReqClientInnerData implements IProtocol {
     private byte[] mGb = null;
     private final int mRetryCount;
 
-    public ReqClientInnerData(byte[] clientNonce, byte[] serverNonce, byte[] gB) {
+    ReqClientInnerData(byte[] clientNonce, byte[] serverNonce, byte[] gB) {
         mClientNonce = clientNonce;
         mServerNonce = serverNonce;
         mGb = gB;

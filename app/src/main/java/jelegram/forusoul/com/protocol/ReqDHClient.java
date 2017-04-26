@@ -47,7 +47,7 @@ public class ReqDHClient implements IProtocol {
             mOutputStream.write(mServerNonce);
 
             ReqClientInnerData reqClientInnerData = new ReqClientInnerData(mClientNonce, mServerNonce, mGb);
-            byte[] clientInnerBytes = CipherManager.getInstance().decryptAesIge(reqClientInnerData.serializeSteam(), mAgeKey, mAgeIv);
+            byte[] clientInnerBytes = CipherManager.getInstance().encryptAesIge(reqClientInnerData.serializeSteam(), mAgeKey, mAgeIv);
             if (clientInnerBytes == null || clientInnerBytes.length == 0) {
                 Log.e(TAG, "serializeSteam(), Failed to encrypt inner data");
                 return null;
