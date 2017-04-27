@@ -42,11 +42,11 @@ public class ConnectionManager {
     private byte[] mAuthNewNonce = null;
     private byte[] mHandshakeAuthKey = null;
 
-    private static final Object AUTH_KEY_LOCK = new Object();
-    private long mAuthKey = 0;
-
     private final Object HANDSHAKE_STATE_LOCK = new Object();
     private boolean mIsHandshakeFinished = false;
+    private byte[] mAuthKey = null;
+
+    private final ArrayList<IProtocol> mPendingRequestList = new ArrayList<>();
 
     private static class SingletonHolder {
         static final ConnectionManager INSTANCE = new ConnectionManager();
@@ -60,15 +60,31 @@ public class ConnectionManager {
         executeBeginHandshake();
     }
 
+    public void requestSenApi(IProtocol protocol) {
+        if (protocol == null) {
+            return;
+        }
+
+
+    }
+
     private void sendRequest(IProtocol protocol) throws Exception {
         if (protocol == null) {
             return;
         }
 
         ByteArrayOutputStream body = new ByteArrayOutputStream();
-        // auth key_id ....
-        synchronized (AUTH_KEY_LOCK) {
-            ByteUtils.writeInt64(body, mAuthKey);
+        synchronized (HANDSHAKE_STATE_LOCK) {
+            if (mIsHandshakeFinished == false && protocol.isHandshakeProtocol() == false) {
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "sendRequest(), Pending request, because of handshaking status");
+                }
+                mPendingRequestList.add(protocol);
+                return;
+            }
+
+            // auth key_id ....
+            body.write(mAuthKey);
         }
 
         // message id
@@ -177,6 +193,9 @@ public class ConnectionManager {
             if (mIsHandshakeFinished == false) {
                 SecureRandom random = new SecureRandom();
                 mClientNonce = random.generateSeed(16);
+                mAuthKey = new byte[8];
+                Arrays.fill(mAuthKey, (byte)0);
+
                 RequestPQ requestPQ = new RequestPQ(mClientNonce);
                 try {
                     sendRequest(requestPQ);
@@ -232,7 +251,7 @@ public class ConnectionManager {
             }
             return;
         }
-        byte[] g = gAndGbResult.get(0);
+        byte[] b = gAndGbResult.get(0);
         byte[] gB = gAndGbResult.get(1);
 
         // first ack
@@ -251,8 +270,21 @@ public class ConnectionManager {
             sendRequest(dhClient);
 
             // init handshake auth key
-            mHandshakeAuthKey = new byte[256];
+            byte[] authKey = CipherManager.getInstance().requestCalculateModExp(resDHParam.getGA(), b, resDHParam.getDHPrime());
+            if (authKey == null || authKey.length == 0){
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "executeOnResponseDHParam(), Failed to calculate hash key");
+                }
+                return;
+            }
 
+            if (authKey.length < 256) {
+                mHandshakeAuthKey = new byte[256];
+                Arrays.fill(mHandshakeAuthKey, (byte)0);
+                System.arraycopy(authKey, 0, mHandshakeAuthKey, 256 - authKey.length, authKey.length);
+            } else {
+                mHandshakeAuthKey = authKey;
+            }
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "executeOnResponseDHParam(), Failed to send dh exchange client");
@@ -279,6 +311,13 @@ public class ConnectionManager {
             return;
         }
 
+        if (mHandshakeAuthKey == null || mHandshakeAuthKey.length == 0) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Current handshake auth key is empty");
+            }
+            return;
+        }
+
         // first send ack
         try {
             sendRequest(new ReqMessageAck(messageId));
@@ -292,7 +331,20 @@ public class ConnectionManager {
         ByteArrayOutputStream authKeyAuxHashBuffer = new ByteArrayOutputStream();
         authKeyAuxHashBuffer.write(mAuthNewNonce);
         authKeyAuxHashBuffer.write(1);
+        authKeyAuxHashBuffer.write(CipherManager.getInstance().requestSha1(mHandshakeAuthKey));
+        byte[] tempAuthBuffer = authKeyAuxHashBuffer.toByteArray();
+        authKeyAuxHashBuffer.write(CipherManager.getInstance().requestSha1(Arrays.copyOfRange(tempAuthBuffer, 0, tempAuthBuffer.length - 12)));
 
+        // handshake finished
+        synchronized (HANDSHAKE_STATE_LOCK) {
+            mAuthKey = mHandshakeAuthKey;
+            mHandshakeAuthKey = null;
+            mIsHandshakeFinished = true;
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Handshake success");
+            }
+        }
     }
 
     public static void onByteReceived(byte[] message) {

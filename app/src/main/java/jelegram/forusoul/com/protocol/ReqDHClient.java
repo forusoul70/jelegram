@@ -40,6 +40,11 @@ public class ReqDHClient implements IProtocol {
     }
 
     @Override
+    public boolean isHandshakeProtocol() {
+        return true;
+    }
+
+    @Override
     public byte[] serializeSteam() {
         try {
             ByteUtils.writeInt32(mOutputStream, getConstructor());

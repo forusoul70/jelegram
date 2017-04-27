@@ -53,6 +53,11 @@ public class ResDHParam implements IProtocol {
     }
 
     @Override
+    public boolean isHandshakeProtocol() {
+        return true;
+    }
+
+    @Override
     public byte[] serializeSteam() {
         return null;
     }

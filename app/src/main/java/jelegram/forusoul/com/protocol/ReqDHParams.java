@@ -41,6 +41,11 @@ public class ReqDHParams implements IProtocol {
     }
 
     @Override
+    public boolean isHandshakeProtocol() {
+        return true;
+    }
+
+    @Override
     public byte[] serializeSteam() {
         try {
             int[] pq = CipherManager.factorizePQ(mPQ);

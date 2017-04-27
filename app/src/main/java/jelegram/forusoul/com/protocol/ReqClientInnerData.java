@@ -38,6 +38,11 @@ public class ReqClientInnerData implements IProtocol {
     }
 
     @Override
+    public boolean isHandshakeProtocol() {
+        return true;
+    }
+
+    @Override
     public byte[] serializeSteam() {
         if (mGb == null || mGb.length == 0) {
             return null;

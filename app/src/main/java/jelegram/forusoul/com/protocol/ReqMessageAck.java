@@ -27,6 +27,11 @@ public class ReqMessageAck implements IProtocol {
     }
 
     @Override
+    public boolean isHandshakeProtocol() {
+        return true;
+    }
+
+    @Override
     public byte[] serializeSteam() {
         ByteUtils.writeInt32(mOutputStream, getConstructor());
         ByteUtils.writeInt32(mOutputStream, 0x1cb5c415); // magic vector

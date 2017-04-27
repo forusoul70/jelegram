@@ -16,7 +16,8 @@ public interface IProtocol {
         ResDHInner(0xb5890dba),
         ReqDH(0xf5045f1f),
         ReqDHInner(0x6643b654),
-        ResDHGenOK(0x3bcbf734);
+        ResDHGenOK(0x3bcbf734),
+        ReqSendCode(0x86aef0ec);
 
         private final int mValue;
         Constructor(int value) {
@@ -29,6 +30,7 @@ public interface IProtocol {
     }
 
     int getConstructor();
+    boolean isHandshakeProtocol();
     byte[] serializeSteam();
     void readFromStream(@NonNull InputStream stream, int length) throws Exception;
 }

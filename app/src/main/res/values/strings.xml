@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Jelegram</string>
+    <string name="title_activity_login">LoginActivity</string>
+
+    <string name="start">start</string>
+    <string name="insert_phone_number">Insert phone number</string>
 </resources>

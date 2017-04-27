@@ -30,6 +30,11 @@ public class RequestPQ implements IProtocol {
     }
 
     @Override
+    public boolean isHandshakeProtocol() {
+        return true;
+    }
+
+    @Override
     public byte[] serializeSteam() {
         // message constructor
         ByteUtils.writeInt32(mOutStream, getConstructor());

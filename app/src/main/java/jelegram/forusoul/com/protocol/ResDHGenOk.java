@@ -24,6 +24,11 @@ public class ResDHGenOk implements IProtocol {
     }
 
     @Override
+    public boolean isHandshakeProtocol() {
+        return true;
+    }
+
+    @Override
     public byte[] serializeSteam() {
         return new byte[0];
     }
