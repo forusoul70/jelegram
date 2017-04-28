@@ -45,6 +45,7 @@ public class ConnectionManager {
     private final Object HANDSHAKE_STATE_LOCK = new Object();
     private boolean mIsHandshakeFinished = false;
     private byte[] mAuthKey = null;
+    private long mAuthKeyId = 0L;
 
     private final ArrayList<IProtocol> mPendingRequestList = new ArrayList<>();
 
@@ -66,6 +67,46 @@ public class ConnectionManager {
         }
 
 
+    }
+
+    private long generateMessageId() {
+        return System.currentTimeMillis() / 1000;
+    }
+
+    private byte[] createProtocolData(IProtocol protocol) {
+        if (protocol == null) {
+            return null;
+        }
+        
+        synchronized (HANDSHAKE_STATE_LOCK) {
+            if (mIsHandshakeFinished == false) {
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "createProtocolData(), Handshake is not finished");
+                }
+                return null;
+            }
+
+            if (mAuthKeyId == 0L) {
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "createProtocolData(), Current auth key is 0");
+                }
+                return null;
+            }
+        }
+
+        if (protocol.isHandshakeProtocol()) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "createProtocolData(), Request protocol is handshake protocol");
+            }
+            return null;
+        }
+
+        ByteArrayOutputStream protocolStream = new ByteArrayOutputStream();
+        long messageId = generateMessageId();
+
+
+
+        return protocolStream.toByteArray();
     }
 
     private void sendRequest(IProtocol protocol) throws Exception {
@@ -332,12 +373,15 @@ public class ConnectionManager {
         authKeyAuxHashBuffer.write(mAuthNewNonce);
         authKeyAuxHashBuffer.write(1);
         authKeyAuxHashBuffer.write(CipherManager.getInstance().requestSha1(mHandshakeAuthKey));
-        byte[] tempAuthBuffer = authKeyAuxHashBuffer.toByteArray();
-        authKeyAuxHashBuffer.write(CipherManager.getInstance().requestSha1(Arrays.copyOfRange(tempAuthBuffer, 0, tempAuthBuffer.length - 12)));
+        byte[] authKeyBuffer = authKeyAuxHashBuffer.toByteArray();
+        authKeyAuxHashBuffer.write(CipherManager.getInstance().requestSha1(Arrays.copyOfRange(authKeyBuffer, 0, authKeyBuffer.length - 12)));
 
         // handshake finished
         synchronized (HANDSHAKE_STATE_LOCK) {
+            // TODO check DH answer nonce hash
+
             mAuthKey = mHandshakeAuthKey;
+            mAuthKeyId = ByteUtils.convertByte8(Arrays.copyOfRange(authKeyBuffer, authKeyBuffer.length - 8, authKeyBuffer.length));
             mHandshakeAuthKey = null;
             mIsHandshakeFinished = true;
 
