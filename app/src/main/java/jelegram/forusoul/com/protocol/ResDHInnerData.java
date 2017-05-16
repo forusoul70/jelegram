@@ -20,7 +20,7 @@ public class ResDHInnerData implements IProtocol {
     private int mG = -1;
     private byte[] mDHPrime = null;
     private byte[] mGA = null;
-    private int mServerTime = 0;
+    private long mServerTime = 0;
 
     @Override
     public int getConstructor() {
@@ -91,5 +91,9 @@ public class ResDHInnerData implements IProtocol {
 
     public int getG() {
         return mG;
+    }
+
+    public long getServerTime() {
+        return mServerTime;
     }
 }

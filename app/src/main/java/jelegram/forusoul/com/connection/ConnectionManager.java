@@ -32,6 +32,12 @@ public class ConnectionManager {
         System.loadLibrary("native-lib");
     }
 
+    private static class ServerSalt {
+        long validSince = 0L;
+        long validUntil = 0L;
+        long serverSalt = -1L;
+    }
+
     private static final String TAG = "ConnectionManager";
 
     private final SecureRandom mSecureRandom = new SecureRandom();
@@ -48,6 +54,7 @@ public class ConnectionManager {
     private long mAuthKeyId = 0L;
 
     private final ArrayList<IProtocol> mPendingRequestList = new ArrayList<>();
+    private final ArrayList<ServerSalt> mServerSaltList = new ArrayList<>();
 
     private static class SingletonHolder {
         static final ConnectionManager INSTANCE = new ConnectionManager();
@@ -77,7 +84,8 @@ public class ConnectionManager {
         if (protocol == null) {
             return null;
         }
-        
+
+        long authKeyId = -1L;
         synchronized (HANDSHAKE_STATE_LOCK) {
             if (mIsHandshakeFinished == false) {
                 if (BuildConfig.DEBUG) {
@@ -86,7 +94,8 @@ public class ConnectionManager {
                 return null;
             }
 
-            if (mAuthKeyId == 0L) {
+            authKeyId = mAuthKeyId;
+            if (authKeyId == 0L) {
                 if (BuildConfig.DEBUG) {
                     Log.e(TAG, "createProtocolData(), Current auth key is 0");
                 }
@@ -100,11 +109,23 @@ public class ConnectionManager {
             }
             return null;
         }
+        // TODO
+        /* see Datacenter::createRequestsData
+         * buffer->writeInt64(authKeyId);
+            buffer->position(24);
 
+            buffer->writeInt64(getServerSalt());
+            buffer->writeInt64(connection->getSissionId());
+            buffer->writeInt64(messageId);
+            buffer->writeInt32(messageSeqNo);
+            buffer->writeInt32(messageSize);
+            messageBody->serializeToStream(buffer);
+
+            SHA1(buffer->bytes() + 24, 32 + messageSize, messageKey + 4); /in, inputLength, out
+         */
         ByteArrayOutputStream protocolStream = new ByteArrayOutputStream();
         long messageId = generateMessageId();
-
-
+        ByteUtils.writeInt64(protocolStream, authKeyId);
 
         return protocolStream.toByteArray();
     }
@@ -326,6 +347,18 @@ public class ConnectionManager {
             } else {
                 mHandshakeAuthKey = authKey;
             }
+
+            // add server salt
+            long currentTime = System.currentTimeMillis() / 1000;
+            long timeDifference = resDHParam.getServerTime() - currentTime;
+            ServerSalt salt = new ServerSalt();
+            salt.validSince = currentTime + timeDifference -5;
+            salt.validUntil = salt.validSince + 30 * 60;
+            for (int i = 7; i >=0; i++) {
+                salt.serverSalt <<= 8;
+                salt.serverSalt |= (mClientNonce[i] ^ mServerNonce[i]);
+            }
+            mServerSaltList.add(salt);
         } catch (Exception e) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "executeOnResponseDHParam(), Failed to send dh exchange client");
@@ -389,6 +422,36 @@ public class ConnectionManager {
                 Log.d(TAG, "Handshake success");
             }
         }
+    }
+
+    private void addServerSalt(ServerSalt serverSalt) {
+        for (ServerSalt salt : mServerSaltList) {
+            if (salt.serverSalt == serverSalt.serverSalt) {
+                return;
+            }
+        }
+        mServerSaltList.add(serverSalt);
+    }
+
+    private ServerSalt getServerSalt() {
+        long currentTime = System.currentTimeMillis();
+
+        int size = mServerSaltList.size();
+        long maxRemainingInterval = 0;
+        ServerSalt result = null;
+
+        for (int i = size -1; i >=0; i--) {
+            ServerSalt salt = mServerSaltList.get(i);
+            if (salt.validUntil < currentTime) {
+                mServerSaltList.remove(i);
+            } else if (salt.validSince <= currentTime && salt.validUntil > currentTime){
+                if (maxRemainingInterval == 0 || Math.abs(salt.validUntil - currentTime) > currentTime) {
+                    maxRemainingInterval = Math.abs(salt.validUntil - currentTime);
+                    result = salt;
+                }
+            }
+        }
+        return result;
     }
 
     public static void onByteReceived(byte[] message) {

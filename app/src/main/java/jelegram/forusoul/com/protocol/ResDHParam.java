@@ -190,4 +190,8 @@ public class ResDHParam implements IProtocol {
     public byte[] getDecryptionIV() {
         return mDecryptionIV;
     }
+
+    public long getServerTime() {
+        return mInnerData == null ? 0 : mInnerData.getServerTime();
+    }
 }
